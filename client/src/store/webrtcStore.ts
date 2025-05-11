@@ -25,7 +25,9 @@ interface FileTransfer {
     total: number
     received: number
     size: number
+    data?: Uint8Array[] // To store received chunk data on receiver
   }
+  fileBlob?: Blob // To store the final assembled file on receiver
   startTime?: number
   error?: string
   _notified?: boolean
@@ -35,6 +37,8 @@ interface WebRTCState {
   peerConnections: Map<string, PeerConnection>
   transfers: FileTransfer[]
   selectedFiles: File[]
+  pendingFileAcceptances: Map<string, { resolve: (value: unknown) => void; reject: (reason?: any) => void }>
+
 
   // Methods for managing connections
   createPeerConnection: (peerId: string, isAnsweringOffer?: boolean) => Promise<void>
@@ -65,6 +69,7 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
   peerConnections: new Map(),
   transfers: [],
   selectedFiles: [],
+  pendingFileAcceptances: new Map(),
 
   createPeerConnection: async (peerId: string, isAnsweringOffer: boolean = false) => {
     console.log(`[WebRTC] createPeerConnection called for peerId: ${peerId}, isAnsweringOffer: ${isAnsweringOffer}`);
@@ -130,10 +135,39 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
           // Send acknowledgment
           dataChannel.send(
             JSON.stringify({
-              type: "file-offer-ack",
+              type: "file-offer-ack", // This acknowledges receipt of offer
               data: { fileId },
             }),
           )
+        } else if (message.type === "file-accepted") {
+          // Handle file acceptance from receiver
+          const { fileId: acceptedFileId } = message.data;
+          const acceptance = get().pendingFileAcceptances.get(acceptedFileId);
+          if (acceptance) {
+            console.log(`[WebRTC] Received file-accepted for ${acceptedFileId}`);
+            acceptance.resolve(true);
+            get().pendingFileAcceptances.delete(acceptedFileId);
+            // Update transfer status to transferring on sender side as well
+            get().updateTransferStatus(acceptedFileId, "transferring");
+             // Set start time for speed calculation
+            const transfers = get().transfers;
+            const transferIndex = transfers.findIndex((t) => t.fileId === acceptedFileId);
+            if (transferIndex !== -1) {
+              const updatedTransfers = [...transfers];
+              updatedTransfers[transferIndex].startTime = Date.now();
+              set({ transfers: updatedTransfers });
+            }
+          }
+        } else if (message.type === "file-rejected") {
+          // Handle file rejection from receiver
+          const { fileId: rejectedFileId } = message.data;
+          const acceptance = get().pendingFileAcceptances.get(rejectedFileId);
+          if (acceptance) {
+            console.log(`[WebRTC] Received file-rejected for ${rejectedFileId}`);
+            acceptance.reject(new Error("File transfer rejected by peer"));
+            get().pendingFileAcceptances.delete(rejectedFileId);
+            get().updateTransferStatus(rejectedFileId, "error", "Rejected by peer");
+          }
         } else if (message.type === "file-chunk") {
           // Handle file chunk
           const { fileId, chunkIndex, totalChunks, chunk, encryptionDetails } = message.data
@@ -141,35 +175,68 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
           // Decrypt the chunk
           const decryptedChunk = await decryptData(chunk, encryptionDetails.key, encryptionDetails.iv)
 
-          // Process the chunk (in a real implementation, you'd assemble the file)
+          // Process the chunk
           console.log(`[WebRTC] Received chunk ${chunkIndex + 1}/${totalChunks} for file ${fileId} from peer ${peerId}`);
 
-          // Update transfer progress
-          const transfers = get().transfers
-          const transferIndex = transfers.findIndex((t) => t.fileId === fileId)
+          const transfers = get().transfers;
+          // Ensure we are modifying the correct incoming transfer
+          const transferIndex = transfers.findIndex((t) => t.fileId === fileId && t.direction === "incoming");
 
           if (transferIndex !== -1) {
-            const transfer = transfers[transferIndex]
-            const newProgress = (chunkIndex + 1) / totalChunks
+            // It's important to create a new object for the transfer to ensure Zustand detects the change
+            const transfer = { ...transfers[transferIndex] }; 
+
+            // Initialize chunks.data if it doesn't exist
+            if (!transfer.chunks.data) {
+              transfer.chunks.data = [];
+            }
+            // Store the decrypted chunk in order
+            // Ensure chunkIndex is a valid index for the array
+            transfer.chunks.data[chunkIndex] = decryptedChunk;
+            transfer.chunks.received = chunkIndex + 1;
+            
+            const newProgress = transfer.chunks.received / transfer.chunks.total;
 
             // Calculate speed and ETA
-            const now = Date.now()
-            const elapsedTime = transfer.startTime ? (now - transfer.startTime) / 1000 : 0
-            const speed = elapsedTime > 0 ? (transfer.fileSize * newProgress) / elapsedTime : 0
-            const remainingBytes = transfer.fileSize * (1 - newProgress)
-            const eta = speed > 0 ? remainingBytes / speed : 0
+            const now = Date.now();
+            const elapsedTime = transfer.startTime ? (now - transfer.startTime) / 1000 : 0;
+            const speed = elapsedTime > 0 ? (transfer.fileSize * newProgress) / elapsedTime : 0;
+            const remainingBytes = transfer.fileSize * (1 - newProgress);
+            const eta = speed > 0 ? remainingBytes / speed : 0;
 
-            get().updateTransferProgress(fileId, newProgress, speed, eta)
+            get().updateTransferProgress(fileId, newProgress, speed, eta);
+            
+            let finalStatus = transfer.status; // Keep current status unless changed
 
-            // Update chunks received
-            const updatedTransfers = [...transfers]
-            updatedTransfers[transferIndex].chunks.received = chunkIndex + 1
-            set({ transfers: updatedTransfers })
-
-            // If all chunks received, mark as completed
-            if (chunkIndex + 1 === totalChunks) {
-              get().updateTransferStatus(fileId, "completed")
+            // If all chunks received, assemble the file and mark as completed
+            if (transfer.chunks.received === transfer.chunks.total) {
+              if (transfer.chunks.data && transfer.chunks.data.length === transfer.chunks.total && transfer.chunks.data.every(c => c instanceof Uint8Array)) {
+                const fileBlob = new Blob(transfer.chunks.data, { type: transfer.fileType });
+                transfer.fileBlob = fileBlob;
+                // Optionally clear chunks.data to free memory if Blob is sufficient for UI
+                // delete transfer.chunks.data; 
+                console.log(`[WebRTC] File ${transfer.fileName} (${fileId}) fully received and assembled into a Blob.`);
+                finalStatus = "completed";
+              } else {
+                console.error(`[WebRTC] All chunks received for ${transfer.fileName} (${fileId}), but chunk data is incomplete or invalid for assembly.`);
+                transfer.error = "Chunk data missing/invalid after completion";
+                finalStatus = "error";
+              }
             }
+            
+            // Update the specific transfer in the transfers array
+            const updatedTransfersArray = get().transfers.map((t, idx) => 
+              idx === transferIndex ? transfer : t
+            );
+            set({ transfers: updatedTransfersArray });
+
+            // Update status separately if it changed (e.g., to completed or error)
+            if (finalStatus !== transfer.status) {
+                 get().updateTransferStatus(fileId, finalStatus, transfer.error);
+            }
+
+          } else {
+            console.warn(`[WebRTC] Received chunk for unknown or non-incoming transfer ${fileId}`);
           }
 
           // Send acknowledgment
@@ -369,21 +436,29 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
         }),
       )
 
-      // Wait for acknowledgment (in a real implementation, you'd handle this properly)
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      // Update transfer status
-      get().updateTransferStatus(fileId, "transferring")
-
-      // Set start time for speed calculation
-      const transfers = get().transfers
-      const transferIndex = transfers.findIndex((t) => t.fileId === fileId)
-
-      if (transferIndex !== -1) {
-        const updatedTransfers = [...transfers]
-        updatedTransfers[transferIndex].startTime = Date.now()
-        set({ transfers: updatedTransfers })
+      // Wait for the receiver to accept the file offer
+      console.log(`[WebRTC] Waiting for acceptance of file ${file.name} (${fileId}) from ${peerId}`);
+      try {
+        await new Promise((resolve, reject) => {
+          get().pendingFileAcceptances.set(fileId, { resolve, reject });
+          // Set a timeout for acceptance
+          setTimeout(() => {
+            if (get().pendingFileAcceptances.has(fileId)) {
+              get().pendingFileAcceptances.delete(fileId);
+              reject(new Error("File offer acceptance timeout"));
+              get().updateTransferStatus(fileId, "error", "Acceptance timeout");
+            }
+          }, 30000); // 30-second timeout for acceptance
+        });
+        console.log(`[WebRTC] File offer for ${file.name} (${fileId}) accepted by ${peerId}. Starting transfer.`);
+      } catch (error: any) {
+        console.error(`[WebRTC] File offer for ${file.name} (${fileId}) was not accepted or timed out:`, error.message);
+        get().updateTransferStatus(fileId, "error", error.message || "Offer not accepted");
+        continue; // Move to the next file if this one wasn't accepted
       }
+
+      // If accepted, status is already set to 'transferring' by the 'file-accepted' handler
+      // and startTime is also set.
 
       // Read and send file in chunks
       const totalChunks = Math.ceil(file.size / chunkSize);
@@ -697,23 +772,65 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
     }
   },
 
-  acceptTransfer: (transferId: string) => {
-    const { transfers } = get()
-    const transferIndex = transfers.findIndex((t) => t.fileId === transferId)
+  acceptTransfer: (transferId: string) => { // This is called by the RECEIVER
+    const { transfers, peerConnections } = get()
+    const transfer = transfers.find((t) => t.fileId === transferId && t.direction === "incoming");
 
-    if (transferIndex !== -1) {
-      // Update transfer status
-      get().updateTransferStatus(transferId, "transferring")
+    if (transfer && transfer.status === "pending") {
+      get().updateTransferStatus(transferId, "transferring"); // Update local status
 
       // Set start time for speed calculation
-      const updatedTransfers = [...transfers]
-      updatedTransfers[transferIndex].startTime = Date.now()
-      set({ transfers: updatedTransfers })
+      const transferIndex = transfers.findIndex((t) => t.fileId === transferId);
+      if (transferIndex !== -1) {
+        const updatedTransfers = [...transfers];
+        updatedTransfers[transferIndex].startTime = Date.now();
+        set({ transfers: updatedTransfers });
+      }
+
+      // Send "file-accepted" message to the sender
+      const connection = peerConnections.get(transfer.peerId);
+      if (connection && connection.dataChannel && connection.dataChannel.readyState === "open") {
+        console.log(`[WebRTC] Receiver accepting file ${transferId}. Sending file-accepted to ${transfer.peerId}`);
+        connection.dataChannel.send(
+          JSON.stringify({
+            type: "file-accepted",
+            data: { fileId: transferId },
+          }),
+        );
+      } else {
+        console.error(`[WebRTC] Cannot send file-accepted for ${transferId}: Data channel not open or connection missing.`);
+        get().updateTransferStatus(transferId, "error", "Failed to send acceptance (channel issue)");
+      }
+    } else {
+      console.warn(`[WebRTC] acceptTransfer called for ${transferId}, but no pending incoming transfer found or status is not pending.`);
     }
   },
 
-  rejectTransfer: (transferId: string) => {
-    get().cancelTransfer(transferId)
+  rejectTransfer: (transferId: string) => { // This is called by the RECEIVER
+    const { transfers, peerConnections } = get();
+    const transfer = transfers.find((t) => t.fileId === transferId && t.direction === "incoming");
+
+    if (transfer && transfer.status === "pending") {
+      get().updateTransferStatus(transferId, "error", "Rejected by you");
+
+      // Send "file-rejected" message to the sender
+      const connection = peerConnections.get(transfer.peerId);
+      if (connection && connection.dataChannel && connection.dataChannel.readyState === "open") {
+        console.log(`[WebRTC] Receiver rejecting file ${transferId}. Sending file-rejected to ${transfer.peerId}`);
+        connection.dataChannel.send(
+          JSON.stringify({
+            type: "file-rejected",
+            data: { fileId: transferId },
+          }),
+        );
+      } else {
+        console.error(`[WebRTC] Cannot send file-rejected for ${transferId}: Data channel not open or connection missing.`);
+      }
+    } else {
+      console.warn(`[WebRTC] rejectTransfer called for ${transferId}, but no pending incoming transfer found or status is not pending.`);
+    }
+    // We don't call get().cancelTransfer() here as that's more for an active transfer.
+    // The status is already set to error.
   },
 
   updateTransferProgress: (transferId: string, progress: number, speed: number, eta: number) => {

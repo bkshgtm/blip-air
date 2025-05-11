@@ -126,12 +126,33 @@ const TransferList = () => {
                             {formatSpeed(transfer.speed)} • {formatTime(transfer.eta)} remaining
                           </>
                         )}
-                        {transfer.status === "completed" && "Transfer complete"}
+                        {transfer.status === "completed" && transfer.direction === "outgoing" && "Transfer complete"}
+                        {transfer.status === "completed" && transfer.direction === "incoming" && "File received"}
                         {transfer.status === "paused" && "Transfer paused"}
                         {transfer.status === "error" && transfer.error}
                       </Text>
 
                       <HStack>
+                        {transfer.status === "completed" && transfer.direction === "incoming" && transfer.fileBlob && (
+                          <IconButton
+                            aria-label="Download file"
+                            icon={<Download size={16} />}
+                            size="xs"
+                            colorScheme="green"
+                            onClick={() => {
+                              if (transfer.fileBlob) {
+                                const url = URL.createObjectURL(transfer.fileBlob);
+                                const a = document.createElement("a");
+                                a.href = url;
+                                a.download = transfer.fileName || "download";
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                URL.revokeObjectURL(url);
+                              }
+                            }}
+                          />
+                        )}
                         {transfer.status !== "completed" && transfer.status !== "error" && (
                           <>
                             {transfer.status === "transferring" ? (
