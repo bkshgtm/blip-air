@@ -1,11 +1,35 @@
 import express from "express"
-import http from "http"
+import https from "https" // Changed from http
+import fs from "fs" // Added for reading cert files
+import path from "path" // Added for resolving cert file paths
+import { fileURLToPath } from "url"; // Added for ES module __dirname equivalent
 import { Server } from "socket.io"
 import cors from "cors"
 import { v4 as uuidv4 } from "uuid"
 
 const app = express()
-const server = http.createServer(app)
+
+// ES module equivalent for __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// SSL Certificate paths - ensure these files are in the server directory
+const keyPath = path.resolve(__dirname, 'key.pem');
+const certPath = path.resolve(__dirname, 'cert.pem');
+
+// Check if certificate files exist
+if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
+  console.error("SSL certificate files not found. Please ensure key.pem and cert.pem are in the server directory.");
+  console.error("You can copy them from the 'client' directory if you generated them there for Vite.");
+  process.exit(1); // Exit if certs are missing
+}
+
+const options = {
+  key: fs.readFileSync(keyPath),
+  cert: fs.readFileSync(certPath),
+};
+
+const server = https.createServer(options, app) // Changed to https.createServer
 
 // Configure CORS for Socket.IO
 const io = new Server(server, {

@@ -3,7 +3,23 @@ import { io, type Socket } from "socket.io-client";
 import { useWebRTCStore } from "./webrtcStore"; // Import the WebRTC store
 
 // Define the server URL - in production this would be your deployed backend
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://192.168.1.76:3001"
+let VITE_SERVER_URL_CONFIG = import.meta.env.VITE_SERVER_URL || "192.168.1.76:3001";
+
+// Remove any existing protocol from the VITE_SERVER_URL_CONFIG
+const VITE_SERVER_URL_BASE = VITE_SERVER_URL_CONFIG.replace(/^(wss?:\/\/)?/, "");
+
+let SERVER_URL: string;
+
+if (typeof window !== 'undefined') {
+  const protocol = window.location.protocol === "https:" ? "wss://" : "ws://";
+  SERVER_URL = `${protocol}${VITE_SERVER_URL_BASE}`;
+  console.log(`[SocketStore] Determined SERVER_URL: ${SERVER_URL}`);
+} else {
+  // Fallback for non-browser environments
+  SERVER_URL = `ws://${VITE_SERVER_URL_BASE}`; // Default to ws for non-browser
+  console.log(`[SocketStore] Fallback SERVER_URL (non-browser): ${SERVER_URL}`);
+}
+
 
 interface SocketState {
   socket: Socket | null

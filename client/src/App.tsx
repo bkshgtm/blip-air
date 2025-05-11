@@ -18,11 +18,9 @@ function App() {
     // Initialize socket connection when app loads
     initSocket()
 
-    // Cleanup socket connection when app unmounts
-    return () => {
-      disconnectSocket()
-    }
-  }, [initSocket, disconnectSocket])
+    // The socket will remain active as long as the app is open.
+    // It will disconnect when the browser tab is closed or if disconnectSocket is called explicitly.
+  }, [initSocket])
 
   return (
     <Layout>

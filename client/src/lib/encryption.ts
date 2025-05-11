@@ -4,6 +4,11 @@
 
 // Generate a random encryption key
 export async function generateKey(): Promise<CryptoKey> {
+  if (!window.crypto || !window.crypto.subtle) {
+    throw new Error(
+      "Web Crypto API (window.crypto.subtle) is not available. Ensure the application is served over a secure context (HTTPS or localhost).",
+    )
+  }
   return await window.crypto.subtle.generateKey(
     {
       name: "AES-GCM",

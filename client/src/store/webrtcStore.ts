@@ -7,6 +7,7 @@ interface PeerConnection {
   connection: RTCPeerConnection
   dataChannel?: RTCDataChannel
   sessionId: string
+  queuedIceCandidates?: RTCIceCandidate[]; // Add this line
 }
 
 interface FileTransfer {
@@ -36,7 +37,7 @@ interface WebRTCState {
   selectedFiles: File[]
 
   // Methods for managing connections
-  createPeerConnection: (peerId: string) => Promise<void>
+  createPeerConnection: (peerId: string, isAnsweringOffer?: boolean) => Promise<void>
   closePeerConnection: (peerId: string) => void
 
   // Methods for file transfers
@@ -57,6 +58,7 @@ interface WebRTCState {
   handleRelayOffer: (offer: RTCSessionDescriptionInit, fromPeerId: string) => Promise<void>
   handleRelayAnswer: (answer: RTCSessionDescriptionInit, fromPeerId: string) => Promise<void>
   handleRelayIceCandidate: (candidate: RTCIceCandidateInit, fromPeerId: string) => Promise<void>
+  processQueuedIceCandidates: (peerId: string) => Promise<void>; // Add this line
 }
 
 export const useWebRTCStore = create<WebRTCState>((set, get) => ({
@@ -64,8 +66,8 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
   transfers: [],
   selectedFiles: [],
 
-  createPeerConnection: async (peerId: string) => {
-    console.log(`[WebRTC] createPeerConnection called for peerId: ${peerId}`);
+  createPeerConnection: async (peerId: string, isAnsweringOffer: boolean = false) => {
+    console.log(`[WebRTC] createPeerConnection called for peerId: ${peerId}, isAnsweringOffer: ${isAnsweringOffer}`);
     const socket = useSocketStore.getState().socket
     if (!socket) {
       console.error("[WebRTC] No socket available in createPeerConnection");
@@ -254,9 +256,9 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
 
     // Signaling listeners will be handled globally in socketStore.ts
 
-    // Create and send an offer if this is the initiating side
+    // Create and send an offer if this is the initiating side AND we are not just answering an offer
     // Check if we are not already in a connection process (e.g. received an offer)
-    if (peerConnection.signalingState === "stable") { // Only create offer if stable (not already processing one)
+    if (!isAnsweringOffer && peerConnection.signalingState === "stable") { 
         console.log(`[WebRTC] Creating offer for peer ${peerId} as initiator.`);
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
@@ -492,39 +494,33 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
     }
 
     if (!pc) {
-      console.log(`[WebRTC] No existing PC for ${fromPeerId}, creating one to handle offer.`);
-      // Call createPeerConnection for the offering peer. 
-      // This will set up the PC, data channel, and local ICE candidate listeners.
-      // It will NOT create and send an offer back, because signalingState won't be 'stable'.
-      await get().createPeerConnection(fromPeerId); 
+      console.log(`[WebRTC] No existing PC for ${fromPeerId}, creating one to handle offer by calling createPeerConnection with isAnsweringOffer=true.`);
+      await get().createPeerConnection(fromPeerId, true); // Pass true here
       pc = get().peerConnections.get(fromPeerId)?.connection;
       if (!pc) {
         console.error(`[WebRTC] Failed to create PC for ${fromPeerId} in handleRelayOffer`);
         return;
       }
-    }
-    
-    // Glare handling (simplified)
-    // If this client also sent an offer (signalingState is 'have-local-offer'),
-    // a decision must be made. A common strategy is for one peer (e.g., with the "smaller" ID) to yield.
-    if (pc.signalingState === "have-local-offer") {
-      const mySessionId = useSocketStore.getState().sessionId;
-      // Example: if my ID is "smaller", I'll ignore their offer and expect them to handle mine.
-      // This is a very basic glare resolution.
-      if (mySessionId && mySessionId < fromPeerId) {
-        console.warn(`[WebRTC] Glare: I (${mySessionId}) sent an offer and received one from ${fromPeerId}. I will ignore their offer.`);
-        return; 
-      }
-      console.warn(`[WebRTC] Glare: I (${mySessionId}) sent an offer and received one from ${fromPeerId}. I will process their offer.`);
+    } else if (pc.signalingState !== "stable" && pc.signalingState !== "have-remote-offer") {
+        // If PC exists but is in a state not ready to receive an offer (e.g., have-local-offer)
+        // This is part of glare handling.
+        const mySessionId = useSocketStore.getState().sessionId;
+        if (mySessionId && mySessionId < fromPeerId) { // My ID is "smaller", I initiated, they should yield.
+             console.warn(`[WebRTC] Glare in handleRelayOffer: I (${mySessionId}) sent an offer to ${fromPeerId} and they also sent one. My ID is smaller, I expect them to handle my offer. Ignoring their offer.`);
+             return;
+        }
+         console.warn(`[WebRTC] Glare in handleRelayOffer: I (${mySessionId}) sent an offer to ${fromPeerId} and they also sent one. My ID is larger/equal, I will process their offer.`);
     }
 
 
     try {
-      console.log(`[WebRTC] Setting remote description for offer from ${fromPeerId}`);
+      console.log(`[WebRTC] Setting remote description for offer from ${fromPeerId}. Current signaling state: ${pc.signalingState}`);
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      await get().processQueuedIceCandidates(fromPeerId); // Process queued candidates
       
-      console.log(`[WebRTC] Creating answer for ${fromPeerId}`);
+      console.log(`[WebRTC] Creating answer for ${fromPeerId}. Current signaling state: ${pc.signalingState}`);
       const answer = await pc.createAnswer();
+      console.log(`[WebRTC] Setting local description for answer to ${fromPeerId}.`);
       await pc.setLocalDescription(answer);
       
       console.log(`[WebRTC] Sending answer to ${fromPeerId}`);
@@ -541,6 +537,7 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
       try {
         console.log(`[WebRTC] Setting remote description for answer from ${fromPeerId}`);
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        await get().processQueuedIceCandidates(fromPeerId); // Process queued candidates
       } catch (error) {
         console.error(`[WebRTC] Error in handleRelayAnswer for ${fromPeerId}:`, error);
       }
@@ -551,20 +548,71 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
 
   handleRelayIceCandidate: async (candidate, fromPeerId) => {
     console.log(`[WebRTC] handleRelayIceCandidate from ${fromPeerId}`);
-    const pc = get().peerConnections.get(fromPeerId)?.connection;
-    if (pc) {
+    const peerConnectionEntry = get().peerConnections.get(fromPeerId);
+    if (!peerConnectionEntry) {
+      console.warn(`[WebRTC] Received ICE candidate from ${fromPeerId}, but no PC entry found.`);
+      return;
+    }
+
+    const pc = peerConnectionEntry.connection;
+    
+    // Ensure candidate is not null or just an empty object before creating RTCIceCandidate
+    if (!candidate || (typeof candidate === 'object' && Object.keys(candidate).length === 0 && !candidate.candidate)) {
+        console.log(`[WebRTC] Received null or truly empty ICE candidate object from ${fromPeerId}, typically signals end of candidates.`);
+        // Browsers send an empty candidate string "" to signal the end, or null.
+        // RTCIceCandidate constructor can handle candidate: "" or candidate: null.
+        // If the candidate object itself is null/empty, we might not need to do anything or just log.
+        // For safety, we'll proceed if it's a valid-looking candidate structure or an empty string for candidate.
+        if (candidate && typeof candidate.candidate !== 'string') {
+             console.log(`[WebRTC] Received malformed ICE candidate from ${fromPeerId}, ignoring:`, candidate);
+             return;
+        }
+    }
+    
+    const candidateInstance = new RTCIceCandidate(candidate);
+
+    if (pc.remoteDescription) {
       try {
-        if (candidate && Object.keys(candidate).length > 0) { // Check if candidate is not empty
-          console.log(`[WebRTC] Adding ICE candidate from ${fromPeerId}:`, candidate);
-          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        if (candidateInstance.candidate) { 
+          console.log(`[WebRTC] Remote description is set. Adding ICE candidate from ${fromPeerId}:`, candidateInstance);
+          await pc.addIceCandidate(candidateInstance);
         } else {
-          console.log(`[WebRTC] Received empty ICE candidate from ${fromPeerId}, ignoring.`);
+          console.log(`[WebRTC] Received end-of-candidates signal from ${fromPeerId}.`);
+          // No need to call addIceCandidate with an empty/null candidate string if the object itself is structured
+          // The browser handles the end-of-candidates signal.
         }
       } catch (error) {
         console.error(`[WebRTC] Error adding ICE candidate from ${fromPeerId}:`, error);
       }
     } else {
-      console.warn(`[WebRTC] Received ICE candidate from ${fromPeerId}, but no PC found.`);
+      console.log(`[WebRTC] Remote description not set for ${fromPeerId}. Queuing ICE candidate.`);
+      if (!peerConnectionEntry.queuedIceCandidates) {
+        peerConnectionEntry.queuedIceCandidates = [];
+      }
+      peerConnectionEntry.queuedIceCandidates.push(candidateInstance);
+    }
+  },
+
+  processQueuedIceCandidates: async (peerId: string) => {
+    const peerConnectionEntry = get().peerConnections.get(peerId);
+    if (peerConnectionEntry && peerConnectionEntry.queuedIceCandidates && peerConnectionEntry.connection.remoteDescription) {
+      const pc = peerConnectionEntry.connection;
+      console.log(`[WebRTC] Processing ${peerConnectionEntry.queuedIceCandidates.length} queued ICE candidates for ${peerId}`);
+      while (peerConnectionEntry.queuedIceCandidates.length > 0) {
+        const candidate = peerConnectionEntry.queuedIceCandidates.shift();
+        if (candidate) {
+          try {
+            if (candidate.candidate) { // Ensure there's an actual candidate string
+              console.log(`[WebRTC] Adding queued ICE candidate for ${peerId}:`, candidate);
+              await pc.addIceCandidate(candidate);
+            } else {
+               console.log(`[WebRTC] Ignoring empty/end-of-candidates queued ICE signal for ${peerId}.`);
+            }
+          } catch (error) {
+            console.error(`[WebRTC] Error adding queued ICE candidate for ${peerId}:`, error);
+          }
+        }
+      }
     }
   },
 
