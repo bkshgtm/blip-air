@@ -122,7 +122,8 @@ const Navbar = () => {
               aria-label="Open menu"
               icon={<MenuIcon />}
             />
-            <MenuList layerStyle="glass" border="none" boxShadow="lg">
+            <MenuList border="none" boxShadow="lg"> 
+              {/* layerStyle="glass" removed, will be themed by components.Menu.baseStyle.list */}
               {navItems.map((item) => (
                 <MenuItem
                   key={item.name}
@@ -130,11 +131,19 @@ const Navbar = () => {
                   onClick={() => navigate(item.path)}
                   fontWeight={isActive(item.path) ? "bold" : "normal"}
                   color={isActive(item.path) ? "brand.400" : undefined}
+                  // Resetting hover/focus to let MenuList/MenuItem theme defaults apply or be controlled by layerStyle
+                  _hover={{}} 
+                  _focus={{}}
                 >
                   {item.name}
                 </MenuItem>
               ))}
-              <MenuItem icon={<QrCode />} onClick={openQrCodeModal}> {/* Use openQrCodeModal from uiStore */}
+              <MenuItem 
+                icon={<QrCode />} 
+                onClick={openQrCodeModal}
+                _hover={{}}
+                _focus={{}}
+              > 
                 Show QR Code
               </MenuItem>
             </MenuList>

@@ -59,9 +59,13 @@ const styles = {
         "0%, 100%": { backgroundPosition: "0% 50%" },
         "50%":      { backgroundPosition: "100% 50%" },
       },
+      html: {
+        bg: dark ? colors.matte[200] : "white", // Match body background
+        minHeight: "100%", // Ensure html also covers full height
+      },
       body: {
         position: "relative",
-        bg: dark ? colors.matte[200] : "white",
+        bg: dark ? colors.matte[200] : "white", // This will now inherit from html or can be set explicitly
         color: mode("gray.800", "gray.100")(props),
         minHeight: "100vh",
         backgroundImage: dark
@@ -106,6 +110,29 @@ const styles = {
 }
 
 const components = {
+  Menu: {
+    baseStyle: (props: StyleFunctionProps) => ({
+      list: {
+        // Apply glassmorphism directly to the MenuList part
+        bg: mode("rgba(255, 255, 255, 0.75)", "rgba(24, 24, 24, 0.75)")(props), // Light: 75% white, Dark: 75% of #181818
+        backdropFilter: "saturate(180%) blur(12px)",
+        border: "1px solid",
+        borderColor: mode("rgba(255,255,255,0.12)", "rgba(255,255,255,0.12)")(props), // Match glass.300
+        borderRadius: "xl", // Softer than default menu, closer to cards
+        boxShadow: "lg", // Standard shadow
+      },
+      item: {
+        // Ensure items have transparent background to show list's glass effect
+        bg: "transparent",
+        _hover: {
+          bg: mode("whiteAlpha.200", "whiteAlpha.100")(props),
+        },
+        _focus: {
+          bg: mode("whiteAlpha.200", "whiteAlpha.100")(props),
+        },
+      },
+    }),
+  },
   Button: {
     baseStyle: {
       fontWeight: "semibold",
@@ -188,7 +215,8 @@ const components = {
 
 const layerStyles = {
   glass: (props: StyleFunctionProps) => ({
-    bg: mode("glass.100", "glass.200")(props),
+    // Using a more opaque base for the glass effect
+    bg: mode("rgba(255, 255, 255, 0.65)", "rgba(24, 24, 24, 0.65)")(props), // Light: 65% white, Dark: 65% of #181818 (matte.300)
     backdropFilter: "saturate(180%) blur(12px)",
     border: "1px solid",
     borderColor: mode("glass.200", "glass.300")(props),
