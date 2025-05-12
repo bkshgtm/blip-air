@@ -1,35 +1,40 @@
-import { create } from "zustand";
-import { io, type Socket } from "socket.io-client";
-import { useWebRTCStore } from "./webrtcStore"; // Import the WebRTC store
+import { create } from "zustand"
+import { io, type Socket } from "socket.io-client"
+import { useWebRTCStore } from "./webrtcStore" // Import the WebRTC store
+import { useSettingsStore } from "./settingsStore"
 
 // Define the server URL - in production this would be your deployed backend
-let VITE_SERVER_URL_CONFIG = import.meta.env.VITE_SERVER_URL || "192.168.1.76:3001";
+const VITE_SERVER_URL_CONFIG = import.meta.env.VITE_SERVER_URL || "192.168.1.76:3001"
 
 // Remove any existing protocol from the VITE_SERVER_URL_CONFIG
-const VITE_SERVER_URL_BASE = VITE_SERVER_URL_CONFIG.replace(/^(wss?:\/\/)?/, "");
+const VITE_SERVER_URL_BASE = VITE_SERVER_URL_CONFIG.replace(/^(wss?:\/\/)?/, "")
 
-let SERVER_URL: string;
+let SERVER_URL: string
 
-if (typeof window !== 'undefined') {
-  const protocol = window.location.protocol === "https:" ? "wss://" : "ws://";
-  SERVER_URL = `${protocol}${VITE_SERVER_URL_BASE}`;
-  console.log(`[SocketStore] Determined SERVER_URL: ${SERVER_URL}`);
+if (typeof window !== "undefined") {
+  const protocol = window.location.protocol === "https:" ? "wss://" : "ws://"
+  SERVER_URL = `${protocol}${VITE_SERVER_URL_BASE}`
+  console.log(`[SocketStore] Determined SERVER_URL: ${SERVER_URL}`)
 } else {
   // Fallback for non-browser environments
-  SERVER_URL = `ws://${VITE_SERVER_URL_BASE}`; // Default to ws for non-browser
-  console.log(`[SocketStore] Fallback SERVER_URL (non-browser): ${SERVER_URL}`);
+  SERVER_URL = `ws://${VITE_SERVER_URL_BASE}` // Default to ws for non-browser
+  console.log(`[SocketStore] Fallback SERVER_URL (non-browser): ${SERVER_URL}`)
 }
 
+interface PeerInfo {
+  id: string
+  name: string
+}
 
 interface SocketState {
   socket: Socket | null
   isConnected: boolean
   sessionId: string | null
-  peers: string[]
+  peers: PeerInfo[]
   initSocket: () => void
   disconnectSocket: () => void
   setSessionId: (id: string) => void
-  setPeers: (peers: string[]) => void
+  setPeers: (peers: PeerInfo[]) => void
 }
 
 export const useSocketStore = create<SocketState>((set, get) => ({
@@ -39,6 +44,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   peers: [],
 
   initSocket: () => {
+    const { sessionName } = useSettingsStore.getState()
     const { socket } = get()
 
     // If socket already exists, don't create a new one
@@ -67,29 +73,33 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       set({ sessionId })
     })
 
-    newSocket.on("peers-updated", (peers: string[]) => {
-      console.log("Peers updated:", peers);
-      set({ peers });
-    });
+    newSocket.on("peers-updated", (peerIds: string[]) => {
+      console.log("Peers updated:", peerIds)
+      const peers = peerIds.map((id) => ({
+        id,
+        name: id === newSocket.id ? sessionName : `Peer ${id.substring(0, 4)}`,
+      }))
+      set({ peers })
+    })
 
     // Setup global handlers for WebRTC signaling
     newSocket.on("relay-offer", ({ offer, from }) => {
-      console.log(`[SocketStore] Received relay-offer from ${from}`);
-      useWebRTCStore.getState().handleRelayOffer(offer, from);
-    });
+      console.log(`[SocketStore] Received relay-offer from ${from}`)
+      useWebRTCStore.getState().handleRelayOffer(offer, from)
+    })
 
     newSocket.on("relay-answer", ({ answer, from }) => {
-      console.log(`[SocketStore] Received relay-answer from ${from}`);
-      useWebRTCStore.getState().handleRelayAnswer(answer, from);
-    });
+      console.log(`[SocketStore] Received relay-answer from ${from}`)
+      useWebRTCStore.getState().handleRelayAnswer(answer, from)
+    })
 
     newSocket.on("relay-ice-candidate", ({ candidate, from }) => {
-      console.log(`[SocketStore] Received relay-ice-candidate from ${from}`);
-      useWebRTCStore.getState().handleRelayIceCandidate(candidate, from);
-    });
+      console.log(`[SocketStore] Received relay-ice-candidate from ${from}`)
+      useWebRTCStore.getState().handleRelayIceCandidate(candidate, from)
+    })
 
     // Store the socket in state
-    set({ socket: newSocket });
+    set({ socket: newSocket })
   },
 
   disconnectSocket: () => {
@@ -104,7 +114,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     set({ sessionId: id })
   },
 
-  setPeers: (peers: string[]) => {
+  setPeers: (peers: PeerInfo[]) => {
     set({ peers })
   },
 }))

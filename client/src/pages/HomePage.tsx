@@ -29,26 +29,24 @@ const HomePage = () => {
   const { isConnected } = useSocketStore()
   const { openQrCodeModal } = useUiStore() // Get openQrCodeModal from uiStore
 
-  const accentGradient = useColorModeValue( // Define accentGradient
+  const accentGradient = useColorModeValue(
+    // Define accentGradient
     "linear(to-br, brand.400, brand.600)",
-    "linear(to-br, brand.300, brand.500)"
-  );
-
-  const ctaGradient = useColorModeValue(
-    "linear(to-br, matte.200, matte.300)",
-    "linear(to-br, matte.300, matte.400)"
+    "linear(to-br, brand.300, brand.500)",
   )
+
+  const ctaGradient = useColorModeValue("linear(to-br, matte.200, matte.300)", "linear(to-br, matte.300, matte.400)")
 
   const features = [
     {
       icon: Wifi,
-      title: "LAN Only",
-      description: "Transfers stay on your network—no internet, no servers.",
+      title: "Direct Connections",
+      description: "Fast peer-to-peer transfers that work anywhere with automatic fallback when needed.",
     },
     {
       icon: Lock,
       title: "End-to-End Encryption",
-      description: "AES-GCM keeps your files locked tight during transit.",
+      description: "WebRTC's built-in encryption keeps your files secure during transit.",
     },
     {
       icon: Zap,
@@ -92,8 +90,8 @@ const HomePage = () => {
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.25, duration: 0.3 }} // Added duration, slightly faster delay
               >
-                Send files directly over your LAN with matte-black glass panels,
-                moving gradients, and end-to-end encryption—no limits, no middlemen.
+                Send files directly between devices with matte-black glass panels, moving gradients, and end-to-end
+                encryption—works anywhere with automatic connectivity assistance.
               </MotionText>
               <Box position="relative" zIndex="1">
                 <MotionButton
@@ -106,7 +104,7 @@ const HomePage = () => {
                   transition={{ delay: 0.35, duration: 0.3 }}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  style={{ pointerEvents: 'auto' }}
+                  style={{ pointerEvents: "auto" }}
                 >
                   Start Sharing
                 </MotionButton>
@@ -144,7 +142,9 @@ const HomePage = () => {
         </GlassCard>
 
         {/* CTA */}
-        <GlassCard w="full" p={10}> {/* This GlassCard provides the adaptive base background */}
+        <GlassCard w="full" p={10}>
+          {" "}
+          {/* This GlassCard provides the adaptive base background */}
           {/* Decorative gradient like on TransferPage cards */}
           <MotionBox
             position={"absolute" as any}
@@ -172,9 +172,7 @@ const HomePage = () => {
           >
             <VStack spacing={4} textAlign="center">
               <Heading size="lg">Ready to share files?</Heading>
-              <Text opacity={0.8}>
-                No sign-ups, no servers—just connect to the same WiFi and go.
-              </Text>
+              <Text opacity={0.8}>No sign-ups required—connect to the same WiFi for fastest transfers.</Text>
               <MotionButton
                 size="lg"
                 variant="qrGlass" // Using new qrGlass variant

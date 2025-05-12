@@ -1,20 +1,19 @@
 "use client"
 
-import { useEffect, useRef } from "react" // Import useRef
-import { useLocation } from "react-router-dom" // Import useLocation
-import { 
-  Container, 
-  VStack, 
-  SimpleGrid, 
-  Box, 
-  Heading, 
+import { useEffect, useRef } from "react"
+import { useLocation } from "react-router-dom"
+import {
+  Container,
+  VStack,
+  SimpleGrid,
+  Box,
+  Heading,
   Text,
   Icon,
-  Button,
   Flex,
   Badge,
   useToast,
-  useColorModeValue
+  useColorModeValue,
 } from "@chakra-ui/react"
 import { motion } from "framer-motion"
 import { FileUp, Download, Users, Activity, Shield } from "lucide-react"
@@ -26,17 +25,6 @@ import TransferStats from "../components/TransferStats"
 import { useSocketStore } from "../store/socketStore"
 import { useWebRTCStore } from "../store/webrtcStore"
 
-// Custom styled divider
-const SoftDivider = ({ ...props }) => (
-  <Box
-    height="1px"
-    width="100%"
-    bgGradient="linear(to-r, transparent, whiteAlpha.300, transparent)"
-    my={3}
-    {...props}
-  />
-)
-
 const MotionCard = motion(GlassCard)
 const MotionHeading = motion(Heading)
 const MotionBox = motion(Box)
@@ -44,107 +32,93 @@ const MotionFlex = motion(Flex)
 const MotionText = motion(Text)
 
 const TransferPage = () => {
-  const toast = useToast()
-  const { isConnected, sessionId } = useSocketStore() // Reverted to sessionId
-  const { transfers, createPeerConnection } = useWebRTCStore() // Import createPeerConnection
-  const location = useLocation() // For accessing query params
-  
-  // Color mode values
-  const accentGradient = useColorModeValue(
-    "linear(to-br, brand.400, brand.600)",
-    "linear(to-br, brand.300, brand.500)"
-  )
-  
+  const toast = useToast({ position: "bottom" }) // Changed position to bottom
+  const { isConnected, sessionId, peers } = useSocketStore()
+  const { transfers, createPeerConnection } = useWebRTCStore()
+  const location = useLocation()
+
+  const accentGradient = useColorModeValue("linear(to-br, brand.400, brand.600)", "linear(to-br, brand.300, brand.500)")
+
   const secondaryGradient = useColorModeValue(
     "linear(to-br, matte.200, matte.300)",
-    "linear(to-br, matte.300, matte.400)"
+    "linear(to-br, matte.300, matte.400)",
   )
-  
-  const cardHoverBg = useColorModeValue("rgba(255,255,255,0.1)", "rgba(0,0,0,0.1)") // More subtle glass hover
+
+  const cardHoverBg = useColorModeValue("rgba(255,255,255,0.1)", "rgba(0,0,0,0.1)")
   const statusBg = useColorModeValue("rgba(255,255,255,0.9)", "rgba(20,20,20,0.8)")
   const highlightColor = useColorModeValue("brand.500", "brand.300")
   const cardBorderColor = useColorModeValue("rgba(230,235,240,0.3)", "rgba(60,70,80,0.3)")
-  const softBorderColor = useColorModeValue("rgba(230,235,240,0.1)", "rgba(60,70,80,0.1)")
-  const softTextColor = useColorModeValue("gray.600", "gray.300")
   const softBgHover = useColorModeValue("rgba(245,248,252,0.5)", "rgba(30,35,45,0.5)")
-  
+  const peerListBorderColor = useColorModeValue("rgba(230,235,240,0.2)", "rgba(60,70,80,0.2)") // Moved hook call
+  const statsSeparatorBg = useColorModeValue("rgba(230,235,240,0.4)", "rgba(60,70,80,0.4)") // Moved hook call
+  const transferListBorderColor = useColorModeValue("rgba(230,235,240,0.2)", "rgba(60,70,80,0.2)") // Moved hook call
+
   // Notifications
   useEffect(() => {
-    const done = transfers.filter(t => t.status === "completed" && !t._notified)
-    const failed = transfers.filter(t => t.status === "error" && !t._notified)
-    
-    done.forEach(t => {
+    const done = transfers.filter((t) => t.status === "completed" && !t._notified)
+    const failed = transfers.filter((t) => t.status === "error" && !t._notified)
+
+    done.forEach((t) => {
       toast({
         title: "Transfer Complete",
         description: `${t.fileName} ${t.direction === "incoming" ? "received" : "sent"} successfully.`,
         status: "success",
         duration: 5000,
         isClosable: true,
+        // motionPreset: "none" // Removed incorrect option
       })
       t._notified = true
     })
-    
-    failed.forEach(t => {
+
+    failed.forEach((t) => {
       toast({
         title: "Transfer Failed",
         description: t.error ?? "Unknown error occurred",
         status: "error",
         duration: 5000,
         isClosable: true,
+        // motionPreset: "none" // Removed incorrect option
       })
       t._notified = true
     })
   }, [transfers, toast])
 
-  // Quick stats
-  const activeTransfers = transfers.filter(t => t.status === "transferring").length
-  const completedTransfers = transfers.filter(t => t.status === "completed").length
-  const prevOutgoingActiveTransfersRef = useRef(0);
-  const prevIncomingPendingTransfersRef = useRef(0);
+  const activeTransfers = transfers.filter((t) => t.status === "transferring").length
+  const completedTransfers = transfers.filter((t) => t.status === "completed").length
+  const prevOutgoingActiveTransfersRef = useRef(0)
+  const prevIncomingPendingTransfersRef = useRef(0)
 
-  // Effect to scroll down when a new outgoing transfer starts OR a new incoming offer is received
   useEffect(() => {
     const currentOutgoingActiveTransfers = transfers.filter(
-      t => t.direction === "outgoing" && (t.status === "pending" || t.status === "transferring")
-    ).length;
+      (t) => t.direction === "outgoing" && (t.status === "pending" || t.status === "transferring"),
+    ).length
 
     const currentIncomingPendingTransfers = transfers.filter(
-      t => t.direction === "incoming" && t.status === "pending"
-    ).length;
+      (t) => t.direction === "incoming" && t.status === "pending",
+    ).length
 
-    const newOutgoingStarted = currentOutgoingActiveTransfers > prevOutgoingActiveTransfersRef.current;
-    const newIncomingOfferReceived = currentIncomingPendingTransfers > prevIncomingPendingTransfersRef.current;
+    const newOutgoingStarted = currentOutgoingActiveTransfers > prevOutgoingActiveTransfersRef.current
+    const newIncomingOfferReceived = currentIncomingPendingTransfers > prevIncomingPendingTransfersRef.current
 
     if (newOutgoingStarted || newIncomingOfferReceived) {
-      // A new relevant transfer event occurred, scroll to bottom immediately
       requestAnimationFrame(() => {
-        window.scrollTo({ top: document.documentElement.scrollHeight }); // Instant scroll
-      });
+        window.scrollTo({ top: document.documentElement.scrollHeight }) // Instant scroll
+      })
     }
 
-    prevOutgoingActiveTransfersRef.current = currentOutgoingActiveTransfers;
-    prevIncomingPendingTransfersRef.current = currentIncomingPendingTransfers;
-  }, [transfers]);
+    prevOutgoingActiveTransfersRef.current = currentOutgoingActiveTransfers
+    prevIncomingPendingTransfersRef.current = currentIncomingPendingTransfers
+  }, [transfers])
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const peerIdFromQr = params.get("connectToPeerId");
-    const sessionNameFromQr = params.get("sessionNameLabel");
+    const params = new URLSearchParams(location.search)
+    const peerIdFromQr = params.get("connectToPeerId")
 
-    if (peerIdFromQr && peerIdFromQr !== sessionId) { // Use sessionId here
-      // toast({ // Toast notification removed
-      //   title: "Connecting via QR Code",
-      //   description: `Attempting to connect to ${sessionNameFromQr || peerIdFromQr.substring(0,8)}...`,
-      //   status: "info",
-      //   duration: 5000,
-      //   isClosable: true,
-      // });
-      createPeerConnection(peerIdFromQr);
-      // Consider clearing the URL params after processing to avoid re-triggering if not desired
-      // navigate(location.pathname, { replace: true }); // Example using navigate if available
+    if (peerIdFromQr && peerIdFromQr !== sessionId) {
+      createPeerConnection(peerIdFromQr)
     }
-  }, [location.search, createPeerConnection, toast, sessionId]); // Use sessionId in dependency array
-  
+  }, [location.search, createPeerConnection, toast, sessionId])
+
   // Common card styles
   const featureCardStyles = {
     p: 8,
@@ -152,32 +126,31 @@ const TransferPage = () => {
     borderWidth: "1px",
     borderColor: cardBorderColor,
     borderRadius: "xl",
-    transition: { duration: 0.2, ease: "easeOut" }, // Faster: 0.3 -> 0.2
-      _hover: {
-        boxShadow: "xl",
-        bg: cardHoverBg,
-        transform: "translateY(-4px)"
-      }
+    transition: { duration: 0.2, ease: "easeOut" },
+    _hover: {
+      boxShadow: "xl",
+      bg: cardHoverBg,
+      transform: "translateY(-4px)",
+    },
   }
-  
-  // Animation variants for consistent transitions
+
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
     visible: (delay: number) => ({
       opacity: 1,
       y: 0,
-      transition: { delay, duration: 0.3 } // Faster: 0.5 -> 0.3
-    })
+      transition: { delay, duration: 0.3 },
+    }),
   }
-  
+
   const headingVariants = {
     hidden: { opacity: 0 },
     visible: (delay: number) => ({
       opacity: 1,
-      transition: { delay, duration: 0.25 } // Faster: 0.4 -> 0.25
-    })
+      transition: { delay, duration: 0.25 },
+    }),
   }
-  
+
   return (
     <Container maxW="container.xl" py={10}>
       <VStack spacing={10} align="stretch">
@@ -205,9 +178,9 @@ const TransferPage = () => {
             transform="translate(30%, -30%)"
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.2 }}
-            transition={{ delay: 0.2, duration: 0.7 }} // Faster: delay 0.3->0.2, duration 1->0.7
+            transition={{ delay: 0.2, duration: 0.7 }}
           />
-          
+
           <Flex direction={{ base: "column", md: "row" }} align="center" justify="space-between">
             <Box>
               <MotionHeading
@@ -222,7 +195,7 @@ const TransferPage = () => {
               >
                 Secure File Transfer
               </MotionHeading>
-              
+
               <MotionText
                 opacity={0.8}
                 mb={4}
@@ -231,13 +204,13 @@ const TransferPage = () => {
                 animate={{ opacity: 0.8 }}
                 transition={{ delay: 0.4 }}
               >
-                Send files directly over your LAN with end-to-end encryption — no size limits,
-                no middlemen, complete privacy.
+                Send files directly over your LAN with end-to-end encryption — no size limits, no middlemen, complete
+                privacy.
               </MotionText>
             </Box>
-            
-            <MotionFlex 
-              align="center" 
+
+            <MotionFlex
+              align="center"
               bg={statusBg}
               p={3}
               borderRadius="2xl"
@@ -246,16 +219,16 @@ const TransferPage = () => {
               transition={{ delay: 0.6, duration: 0.4 }}
               boxShadow="md"
             >
-              <Badge 
-                colorScheme={isConnected && sessionId ? "green" : "red"} 
-                variant="solid" 
-                borderRadius="2xl" 
-                px={3} 
+              <Badge
+                colorScheme={isConnected && sessionId ? "green" : "red"}
+                variant="solid"
+                borderRadius="2xl"
+                px={3}
                 py={1}
               >
                 {isConnected && sessionId ? "Connected" : "Disconnected"}
               </Badge>
-              
+
               {isConnected && sessionId && (
                 <Text ml={3} fontSize="sm" opacity={0.8}>
                   Session ID: {sessionId.slice(0, 8)}...
@@ -263,7 +236,7 @@ const TransferPage = () => {
               )}
             </MotionFlex>
           </Flex>
-          
+
           {!isConnected && (
             <Box p={4} bg="red.500" color="white" borderRadius="xl" mt={4}>
               <Flex align="center">
@@ -272,7 +245,7 @@ const TransferPage = () => {
               </Flex>
             </Box>
           )}
-          
+
           {isConnected && !sessionId && (
             <Box p={4} bg="yellow.500" color="white" borderRadius="xl" mt={4}>
               <Flex align="center">
@@ -284,44 +257,41 @@ const TransferPage = () => {
         </MotionCard>
 
         {/* Quick Stats Bar */}
-        <MotionCard
-          p={5}
-          borderRadius="xl"
-          initial="hidden"
-          animate="visible"
-          custom={0.2}
-          variants={cardVariants}
-        >
-          <SimpleGrid columns={{ base: 2, md: 4 }} spacing={5}>
+        <MotionCard p={5} borderRadius="xl" initial="hidden" animate="visible" custom={0.2} variants={cardVariants}>
+          <SimpleGrid columns={{ base: 2, md: 3 }} spacing={5}>
             <Flex align="center">
               <Icon as={Users} boxSize={6} color={highlightColor} mr={3} />
               <Box>
-                <Text fontSize="sm" opacity={0.7}>Available Peers</Text>
-                <Text fontSize="xl" fontWeight="bold">-</Text>
+                <Text fontSize="sm" opacity={0.7}>
+                  Available Peers
+                </Text>
+                <Text fontSize="xl" fontWeight="bold">
+                  {peers.length}
+                </Text>
               </Box>
             </Flex>
-            
+
             <Flex align="center">
               <Icon as={Activity} boxSize={6} color={highlightColor} mr={3} />
               <Box>
-                <Text fontSize="sm" opacity={0.7}>Active Transfers</Text>
-                <Text fontSize="xl" fontWeight="bold">{activeTransfers}</Text>
+                <Text fontSize="sm" opacity={0.7}>
+                  Active Transfers
+                </Text>
+                <Text fontSize="xl" fontWeight="bold">
+                  {activeTransfers}
+                </Text>
               </Box>
             </Flex>
-            
+
             <Flex align="center">
               <Icon as={Download} boxSize={6} color={highlightColor} mr={3} />
               <Box>
-                <Text fontSize="sm" opacity={0.7}>Completed</Text>
-                <Text fontSize="xl" fontWeight="bold">{completedTransfers}</Text>
-              </Box>
-            </Flex>
-            
-            <Flex align="center">
-              <Icon as={Shield} boxSize={6} color={highlightColor} mr={3} />
-              <Box>
-                <Text fontSize="sm" opacity={0.7}>Encryption</Text>
-                <Text fontSize="xl" fontWeight="bold">AES-GCM</Text>
+                <Text fontSize="sm" opacity={0.7}>
+                  Completed
+                </Text>
+                <Text fontSize="xl" fontWeight="bold">
+                  {completedTransfers}
+                </Text>
               </Box>
             </Flex>
           </SimpleGrid>
@@ -340,9 +310,9 @@ const TransferPage = () => {
             variants={cardVariants}
           >
             <MotionBox
-            position={"absolute" as any}
-            bottom={0}
-            left="50%"
+              position={"absolute" as any}
+              bottom={0}
+              left="50%"
               height="80%"
               width="80%"
               bgGradient={accentGradient}
@@ -352,11 +322,11 @@ const TransferPage = () => {
               transform="translate(-50%, 30%)"
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.15 }}
-              transition={{ delay: 0.3, duration: 0.7 }} // Faster: delay 0.5->0.3, duration 1->0.7
+              transition={{ delay: 0.3, duration: 0.7 }}
             />
-            
-            <MotionFlex 
-              align="center" 
+
+            <MotionFlex
+              align="center"
               mb={6}
               initial="hidden"
               animate="visible"
@@ -366,16 +336,16 @@ const TransferPage = () => {
               <Icon as={FileUp} mr={3} color={highlightColor} boxSize={6} />
               <Heading size="md">Select Files to Share</Heading>
             </MotionFlex>
-            
+
             <FileDropZone />
           </MotionCard>
-          
+
           {/* Available Peers - Spans 5 columns on large screens */}
           <MotionCard
             {...featureCardStyles}
             _hover={{}}
             transition={{ duration: 0 }}
-            borderWidth={0} // Remove border for Available Peers
+            borderWidth={0}
             position={"relative" as any}
             gridColumn={{ lg: "span 5" }}
             initial="hidden"
@@ -384,9 +354,9 @@ const TransferPage = () => {
             variants={cardVariants}
           >
             <MotionBox
-            position={"absolute" as any}
-            top={0}
-            right={0}
+              position={"absolute" as any}
+              top={0}
+              right={0}
               height="50%"
               width="50%"
               bgGradient={accentGradient}
@@ -396,11 +366,11 @@ const TransferPage = () => {
               transform="translate(30%, -30%)"
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.15 }}
-              transition={{ delay: 0.4, duration: 0.7 }} // Faster: delay 0.6->0.4, duration 1->0.7
+              transition={{ delay: 0.4, duration: 0.7 }}
             />
-            
-            <MotionFlex 
-              align="center" 
+
+            <MotionFlex
+              align="center"
               mb={6}
               initial="hidden"
               animate="visible"
@@ -410,10 +380,9 @@ const TransferPage = () => {
               <Icon as={Users} mr={3} color={highlightColor} boxSize={6} />
               <Heading size="md">Available Peers</Heading>
             </MotionFlex>
-            
+
             <PeerList />
-            
-            {/* This component might need to be modified in the actual implementation */}
+
             <Box mt={4} className="custom-peer-styling">
               {/* Custom styling to override any sharp lines in PeerList component */}
               <style>{`
@@ -424,11 +393,11 @@ const TransferPage = () => {
                   border: none !important;
                   border-collapse: collapse !important;
                 }
-                
+
                 .custom-peer-styling tr {
-                  border-bottom: 1px solid ${useColorModeValue('rgba(230,235,240,0.2)', 'rgba(60,70,80,0.2)')} !important;
+                  border-bottom: 1px solid ${peerListBorderColor} !important;
                 }
-                
+
                 .custom-peer-styling tr:last-child {
                   border-bottom: none !important;
                 }
@@ -460,9 +429,9 @@ const TransferPage = () => {
             variants={cardVariants}
           >
             <MotionBox
-            position={"absolute" as any}
-            bottom={0}
-            right={0}
+              position={"absolute" as any}
+              bottom={0}
+              right={0}
               height="80%"
               width="40%"
               bgGradient={secondaryGradient}
@@ -474,9 +443,9 @@ const TransferPage = () => {
               animate={{ opacity: 0.15 }}
               transition={{ delay: 0.5, duration: 0.7 }} // Faster: delay 0.7->0.5, duration 1->0.7
             />
-            
-            <MotionFlex 
-              align="center" 
+
+            <MotionFlex
+              align="center"
               mb={6}
               initial="hidden"
               animate="visible"
@@ -486,9 +455,9 @@ const TransferPage = () => {
               <Icon as={Activity} mr={3} color={highlightColor} boxSize={6} />
               <Heading size="md">Transfer Statistics</Heading>
             </MotionFlex>
-            
+
             <TransferStats />
-            
+
             {/* Custom styling to remove any unwanted lines */}
             <Box className="custom-stats-styling">
               <style>{`
@@ -503,7 +472,7 @@ const TransferPage = () => {
                 .custom-stats-styling [role="separator"] {
                   border: none !important;
                   height: 1px !important;
-                  background: linear-gradient(to right, transparent, ${useColorModeValue('rgba(230,235,240,0.4)', 'rgba(60,70,80,0.4)')}, transparent) !important;
+                  background: linear-gradient(to right, transparent, ${statsSeparatorBg}, transparent) !important;
                   margin: 0.5rem 0 !important;
                 }
               `}</style>
@@ -517,7 +486,7 @@ const TransferPage = () => {
           {...featureCardStyles}
           _hover={{}}
           transition={{ duration: 0 }}
-          borderWidth={0} // Remove border for Transfer History
+          borderWidth={0}
           position={"relative" as any}
           initial="hidden"
           animate="visible"
@@ -534,30 +503,21 @@ const TransferPage = () => {
             opacity={0.08}
             borderRadius="full"
             filter="blur(40px)"
-              transform="translate(-30%, -30%)"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.15 }}
-              transition={{ delay: 0.6, duration: 0.7 }} // Faster: delay 0.8->0.6, duration 1->0.7
-            />
-            
-            <MotionFlex 
-            align="center" 
-            mb={6}
-            initial="hidden"
-            animate="visible"
-            custom={0.7}
-            variants={headingVariants}
-          >
+            transform="translate(-30%, -30%)"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.15 }}
+            transition={{ delay: 0.6, duration: 0.7 }}
+          />
+
+          <MotionFlex align="center" mb={6} initial="hidden" animate="visible" custom={0.7} variants={headingVariants}>
             <Icon as={Download} mr={3} color={highlightColor} boxSize={6} />
             <Heading size="md">Transfer History</Heading>
           </MotionFlex>
-          
-                      <TransferList />
-            
-            {/* This component might need to be modified in the actual implementation */}
-            <Box mt={4} className="custom-transfer-styling">
-              {/* Custom styling to override any sharp lines in TransferList component */}
-              <style>{`
+
+          <TransferList />
+
+          <Box mt={4} className="custom-transfer-styling">
+            <style>{`
                 .custom-transfer-styling table,
                 .custom-transfer-styling tr,
                 .custom-transfer-styling td,
@@ -565,11 +525,11 @@ const TransferPage = () => {
                   border: none !important;
                   border-collapse: collapse !important;
                 }
-                
+
                 .custom-transfer-styling tr {
-                  border-bottom: 1px solid ${useColorModeValue('rgba(230,235,240,0.2)', 'rgba(60,70,80,0.2)')} !important;
+                  border-bottom: 1px solid ${transferListBorderColor} !important;
                 }
-                
+
                 .custom-transfer-styling tr:last-child {
                   border-bottom: none !important;
                 }
@@ -587,11 +547,11 @@ const TransferPage = () => {
                 .custom-transfer-styling [role="separator"] {
                   border: none !important;
                   height: 1px !important;
-                  background: linear-gradient(to right, transparent, ${useColorModeValue('rgba(230,235,240,0.4)', 'rgba(60,70,80,0.4)')}, transparent) !important;
+                  background: linear-gradient(to right, transparent, ${statsSeparatorBg}, transparent) !important; // Reused statsSeparatorBg
                   margin: 0.5rem 0 !important;
                 }
               `}</style>
-            </Box>
+          </Box>
         </MotionCard>
       </VStack>
     </Container>

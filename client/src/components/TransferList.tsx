@@ -54,7 +54,14 @@ const TransferList = () => {
       height="100%"
       minH="300px"
     >
-      <Heading size="md">Transfers</Heading>
+      <HStack justify="space-between" align="center">
+        <Heading size="md">Transfers</Heading>
+        {transfers.length > 0 && (
+          <Button size="sm" variant="outline" onClick={() => useWebRTCStore.getState().clearAllTransfers()}>
+            Clear All
+          </Button>
+        )}
+      </HStack>
       <Divider />
 
       {transfers.length === 0 ? (
@@ -145,46 +152,50 @@ const TransferList = () => {
                             transition="all 0.2s ease-out"
                             onClick={() => {
                               if (transfer.fileBlob) {
-                                const url = URL.createObjectURL(transfer.fileBlob);
-                                const a = document.createElement("a");
-                                a.href = url;
-                                a.download = transfer.fileName || "download";
-                                document.body.appendChild(a);
-                                a.click();
-                                document.body.removeChild(a);
-                                URL.revokeObjectURL(url);
+                                const url = URL.createObjectURL(transfer.fileBlob)
+                                const a = document.createElement("a")
+                                a.href = url
+                                a.download = transfer.fileName || "download"
+                                document.body.appendChild(a)
+                                a.click()
+                                document.body.removeChild(a)
+                                URL.revokeObjectURL(url)
                               }
                             }}
                           />
                         )}
-                        {transfer.status !== "completed" && transfer.status !== "error" && (
-                          <>
-                            {transfer.status === "transferring" ? (
-                              <IconButton
-                                aria-label="Pause transfer"
-                                icon={<Pause size={16} />}
-                                size="xs"
-                                onClick={() => pauseTransfer(transfer.fileId)}
-                              />
-                            ) : (
-                              <IconButton
-                                aria-label="Resume transfer"
-                                icon={<Play size={16} />}
-                                size="xs"
-                                onClick={() => resumeTransfer(transfer.fileId)}
-                              />
-                            )}
-                          </>
-                        )}
+                        {transfer.status !== "completed" &&
+                          transfer.status !== "error" &&
+                          transfer.direction === "outgoing" && (
+                            <>
+                              {transfer.status === "transferring" ? (
+                                <IconButton
+                                  aria-label="Pause transfer"
+                                  icon={<Pause size={16} />}
+                                  size="xs"
+                                  onClick={() => pauseTransfer(transfer.fileId)}
+                                />
+                              ) : (
+                                <IconButton
+                                  aria-label="Resume transfer"
+                                  icon={<Play size={16} />}
+                                  size="xs"
+                                  onClick={() => resumeTransfer(transfer.fileId)}
+                                />
+                              )}
+                            </>
+                          )}
 
-                        <IconButton
-                          aria-label="Cancel transfer"
-                          icon={<X size={16} />}
-                          size="xs"
-                          colorScheme="red"
-                          variant="ghost"
-                          onClick={() => cancelTransfer(transfer.fileId)}
-                        />
+                        {transfer.status !== "completed" && (
+                          <IconButton
+                            aria-label="Cancel transfer"
+                            icon={<X size={16} />}
+                            size="xs"
+                            colorScheme="red"
+                            variant="ghost"
+                            onClick={() => cancelTransfer(transfer.fileId)}
+                          />
+                        )}
                       </HStack>
                     </HStack>
                   </>

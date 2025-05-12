@@ -31,14 +31,18 @@ const TransferStats = () => {
 
   const completedTransfers = transfers.filter((t) => t.status === "completed")
 
-  const totalSize = transfers.reduce((acc, t) => acc + t.fileSize, 0)
+  // Calculate stats for ACTIVE transfers only for the main progress display
+  const activeTotalSize = activeTransfers.reduce((acc, t) => acc + t.fileSize, 0)
+  const activeTransferred = activeTransfers.reduce((acc, t) => acc + t.fileSize * t.progress, 0)
+  const activeProgress = activeTotalSize > 0 ? activeTransferred / activeTotalSize : 0
 
-  const totalTransferred = transfers.reduce((acc, t) => acc + t.fileSize * t.progress, 0)
+  // Calculate overall stats for display text (optional, but keeps some context)
+  const overallTotalSize = transfers.reduce((acc, t) => acc + t.fileSize, 0)
+  const overallTransferred = transfers.reduce((acc, t) => acc + t.fileSize * t.progress, 0)
 
+  // Average speed remains based on active transfers
   const averageSpeed =
     activeTransfers.length > 0 ? activeTransfers.reduce((acc, t) => acc + t.speed, 0) / activeTransfers.length : 0
-
-  const overallProgress = totalSize > 0 ? totalTransferred / totalSize : 0
 
   return (
     <MotionBox
@@ -52,51 +56,57 @@ const TransferStats = () => {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
     >
-      <SimpleGrid 
-        columns={{ base: 1, md: 4 }} 
-        spacing={4}
-        bg="transparent"
-      >
-        <HStack spacing={4}>
-          <CircularProgress value={overallProgress * 100} color="brand.400" size="80px" thickness="8px">
-            <CircularProgressLabel>{Math.round(overallProgress * 100)}%</CircularProgressLabel>
-          </CircularProgress>
-          <VStack align="start" spacing={0}>
-            <Text fontSize="sm" color="gray.500">
-              Overall Progress
-            </Text>
-            <Text>
-              {formatFileSize(totalTransferred)} / {formatFileSize(totalSize)}
-            </Text>
-          </VStack>
-        </HStack>
+      {/* Use SimpleGrid only if there are transfers, otherwise show a placeholder */}
+      {transfers.length > 0 ? (
+        <SimpleGrid columns={{ base: 1, md: 4 }} spacing={4} bg="transparent">
+          <HStack spacing={4}>
+            {/* Use activeProgress for the circular bar */}
+            <CircularProgress value={activeProgress * 100} color="brand.400" size="80px" thickness="8px">
+              <CircularProgressLabel>{Math.round(activeProgress * 100)}%</CircularProgressLabel>
+            </CircularProgress>
+            <VStack align="start" spacing={0}>
+              <Text fontSize="sm" color="gray.500">
+                {/* Label reflects active progress */}
+                Active Progress
+              </Text>
+              <Text>
+                {/* Show active transferred / active total */}
+                {formatFileSize(activeTransferred)} / {formatFileSize(activeTotalSize)}
+              </Text>
+            </VStack>
+          </HStack>
 
-        <Stat>
-          <StatLabel>Active Transfers</StatLabel>
-          <StatNumber>{activeTransfers.length}</StatNumber>
-          <StatHelpText>
-            {activeTransfers.length > 0 ? `${activeTransfers.length} in progress` : "No active transfers"}
-          </StatHelpText>
-        </Stat>
+          <Stat>
+            <StatLabel>Active Transfers</StatLabel>
+            <StatNumber>{activeTransfers.length}</StatNumber>
+            <StatHelpText>
+              {activeTransfers.length > 0 ? `${activeTransfers.length} in progress` : "No active transfers"}
+            </StatHelpText>
+          </Stat>
 
-        <Stat>
-          <StatLabel>Completed</StatLabel>
-          <StatNumber>{completedTransfers.length}</StatNumber>
-          <StatHelpText>
-            {completedTransfers.length > 0
-              ? `${formatFileSize(completedTransfers.reduce((acc, t) => acc + t.fileSize, 0))} transferred`
-              : "No completed transfers"}
-          </StatHelpText>
-        </Stat>
+          <Stat>
+            <StatLabel>Completed</StatLabel>
+            <StatNumber>{completedTransfers.length}</StatNumber>
+            <StatHelpText>
+              {completedTransfers.length > 0
+                ? `${formatFileSize(completedTransfers.reduce((acc, t) => acc + t.fileSize, 0))} transferred`
+                : "No completed transfers"}
+            </StatHelpText>
+          </Stat>
 
-        <Stat>
-          <StatLabel>Current Speed</StatLabel>
-          <StatNumber>{formatSpeed(averageSpeed)}</StatNumber>
-          <StatHelpText>
-            {activeTransfers.length > 0 ? `Across ${activeTransfers.length} transfers` : "No active transfers"}
-          </StatHelpText>
-        </Stat>
-      </SimpleGrid>
+          <Stat>
+            <StatLabel>Current Speed</StatLabel>
+            <StatNumber>{formatSpeed(averageSpeed)}</StatNumber>
+            <StatHelpText>
+              {activeTransfers.length > 0 ? `Across ${activeTransfers.length} transfers` : "No active transfers"}
+            </StatHelpText>
+          </Stat>
+        </SimpleGrid>
+      ) : (
+        <Text textAlign="center" color="gray.500">
+          No transfer statistics available yet.
+        </Text>
+      )}
     </MotionBox>
   )
 }

@@ -1,12 +1,9 @@
 "use client"
 
 import { Box, Text, VStack, HStack, Avatar, Button, useColorModeValue, Badge, Divider, Heading } from "@chakra-ui/react"
-import { motion } from "framer-motion"
 import { Send } from "lucide-react"
 import { useSocketStore } from "../store/socketStore"
 import { useWebRTCStore } from "../store/webrtcStore"
-
-const MotionBox = motion(Box)
 
 const PeerList = () => {
   const { peers } = useSocketStore()
@@ -16,10 +13,16 @@ const PeerList = () => {
   const borderColor = useColorModeValue("glass.300", "darkGlass.100")
   const peerItemBgColor = useColorModeValue("glass.100", "darkGlass.100")
 
+  // Button colors
+  const buttonBg = useColorModeValue("brand.50", "brand.900")
+  const buttonColor = useColorModeValue("brand.600", "brand.100")
+  const buttonBorderColor = useColorModeValue("brand.200", "brand.700")
+  const buttonHoverBg = useColorModeValue("brand.100", "brand.800")
+  const buttonActiveBg = useColorModeValue("brand.200", "brand.700")
+
   const handleSendFiles = async (peerId: string) => {
-    // First ensure we have a connection
     await createPeerConnection(peerId)
-    // Then send the files
+
     await sendFiles(peerId)
   }
 
@@ -29,8 +32,8 @@ const PeerList = () => {
       align="stretch"
       bg={bgColor}
       borderRadius="xl"
-      border="none" // Remove this border
-      borderColor={borderColor} // borderColor will no longer have an effect
+      border="none"
+      borderColor={borderColor}
       p={4}
       height="100%"
       minH="300px"
@@ -45,13 +48,13 @@ const PeerList = () => {
         </VStack>
       ) : (
         <VStack spacing={3} align="stretch" overflowY="auto">
-          {peers.map((peerId) => (
-            <Box key={peerId}>
+          {peers.map((peer) => (
+            <Box key={peer.id}>
               <HStack p={3} borderRadius="lg" bg={peerItemBgColor} justify="space-between" boxShadow="sm">
                 <HStack>
-                  <Avatar size="sm" name={`Peer ${peerId.substring(0, 4)}`} bg="brand.400" />
+                  <Avatar size="sm" name={peer.name} bg="brand.400" />
                   <VStack align="start" spacing={0}>
-                    <Text fontWeight="medium">Peer {peerId.substring(0, 8)}...</Text>
+                    <Text fontWeight="medium">{peer.name}</Text>
                     <Badge colorScheme="green" variant="subtle" fontSize="xs">
                       Online
                     </Badge>
@@ -62,26 +65,26 @@ const PeerList = () => {
                   size="sm"
                   leftIcon={<Send size={14} />}
                   variant="solid"
-                  bg={useColorModeValue("brand.50", "brand.900")}
-                  color={useColorModeValue("brand.600", "brand.100")}
+                  bg={buttonBg}
+                  color={buttonColor}
                   border="1px solid"
-                  borderColor={useColorModeValue("brand.200", "brand.700")}
+                  borderColor={buttonBorderColor}
                   _hover={{
-                    bg: useColorModeValue("brand.100", "brand.800"),
+                    bg: buttonHoverBg,
                     transform: "translateY(-1px)",
-                    boxShadow: "sm"
+                    boxShadow: "sm",
                   }}
                   _active={{
-                    bg: useColorModeValue("brand.200", "brand.700"),
-                    transform: "translateY(0)"
+                    bg: buttonActiveBg,
+                    transform: "translateY(0)",
                   }}
                   _disabled={{
                     opacity: 0.5,
-                    cursor: "not-allowed"
+                    cursor: "not-allowed",
                   }}
                   transition="all 0.2s ease"
                   isDisabled={selectedFiles.length === 0}
-                  onClick={() => handleSendFiles(peerId)}
+                  onClick={() => handleSendFiles(peer.id)}
                 >
                   Send
                 </Button>

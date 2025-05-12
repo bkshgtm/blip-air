@@ -23,7 +23,7 @@ export const useSettingsStore = create<SettingsState>()(
         .toString()
         .padStart(4, "0"),
       darkMode: true,
-      chunkSize: 64 * 1024, // 64KB default chunk size
+      chunkSize: 64 * 1024, // Optimized 64KB chunk size for LAN
       useCompression: false,
 
       setSessionName: (name: string) => set({ sessionName: name }),

@@ -18,6 +18,7 @@ import {
   Text,
   VStack,
   useColorModeValue,
+  useToast,
 } from "@chakra-ui/react"
 import { motion } from "framer-motion"
 import { useSettingsStore } from "../store/settingsStore"
@@ -39,14 +40,10 @@ const SettingsPage: React.FC = () => {
     setChunkSize,
     toggleCompression,
   } = useSettingsStore()
+  const toast = useToast({ position: "bottom" }) // Changed position to bottom
 
   const headingColor = useColorModeValue("gray.800", "whiteAlpha.900")
-  const accentColor = useColorModeValue("brand.500", "accent")
-  const highlightColor = useColorModeValue("brand.500", "brand.300")
-  const accentGradient = useColorModeValue(
-    "linear(to-br, brand.400, brand.600)",
-    "linear(to-br, brand.300, brand.500)"
-  )
+  const accentGradient = useColorModeValue("linear(to-br, brand.400, brand.600)", "linear(to-br, brand.300, brand.500)")
 
   return (
     <Container maxW="container.md" py={8}>
@@ -147,12 +144,7 @@ const SettingsPage: React.FC = () => {
                   <FormLabel htmlFor="dark-mode" mb="0">
                     Dark Mode
                   </FormLabel>
-                  <Switch
-                    id="dark-mode"
-                    isChecked={darkMode}
-                    onChange={toggleDarkMode}
-                    colorScheme="brand"
-                  />
+                  <Switch id="dark-mode" isChecked={darkMode} onChange={toggleDarkMode} colorScheme="brand" />
                 </FormControl>
 
                 <FormControl>
@@ -199,12 +191,25 @@ const SettingsPage: React.FC = () => {
               fontWeight="semibold"
               borderRadius="xl"
               _hover={{
-                transform: "translateY(-1px)"
+                transform: "translateY(-1px)",
               }}
               _active={{
-                transform: "translateY(0)"
+                transform: "translateY(0)",
               }}
               transition="all 0.15s ease"
+              onClick={() => {
+                toast({
+                  title: "Settings saved",
+                  description: "Your preferences have been saved",
+                  status: "success",
+                  duration: 3000,
+                  isClosable: true,
+                  // position: "bottom-right", // Removed explicit position, will use hook default 'top-right'
+                  // containerStyle: { // Removed containerStyle to rely on theme's baseStyle
+                  //   backdropFilter: "blur(16px)",
+                  // },
+                })
+              }}
             >
               Save Settings
             </Button>
