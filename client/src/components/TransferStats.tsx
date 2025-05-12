@@ -42,16 +42,21 @@ const TransferStats = () => {
 
   return (
     <MotionBox
-      bg={bgColor}
-      borderRadius="xl"
-      border="1px solid"
-      borderColor={borderColor}
       p={4}
+      borderRadius="xl"
+      border="none"
+      position="relative"
+      overflow="hidden"
+      bg="transparent"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
     >
-      <SimpleGrid columns={{ base: 1, md: 4 }} spacing={4}>
+      <SimpleGrid 
+        columns={{ base: 1, md: 4 }} 
+        spacing={4}
+        bg="transparent"
+      >
         <HStack spacing={4}>
           <CircularProgress value={overallProgress * 100} color="brand.400" size="80px" thickness="8px">
             <CircularProgressLabel>{Math.round(overallProgress * 100)}%</CircularProgressLabel>

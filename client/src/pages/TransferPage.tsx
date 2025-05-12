@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react" // Import useRef
+import { useLocation } from "react-router-dom" // Import useLocation
 import { 
   Container, 
   VStack, 
@@ -44,8 +45,9 @@ const MotionText = motion(Text)
 
 const TransferPage = () => {
   const toast = useToast()
-  const { isConnected, sessionId } = useSocketStore()
-  const { transfers } = useWebRTCStore()
+  const { isConnected, sessionId } = useSocketStore() // Reverted to sessionId
+  const { transfers, createPeerConnection } = useWebRTCStore() // Import createPeerConnection
+  const location = useLocation() // For accessing query params
   
   // Color mode values
   const accentGradient = useColorModeValue(
@@ -58,7 +60,7 @@ const TransferPage = () => {
     "linear(to-br, matte.300, matte.400)"
   )
   
-  const cardHoverBg = useColorModeValue("rgba(255,255,255,0.9)", "rgba(30,30,40,0.8)")
+  const cardHoverBg = useColorModeValue("rgba(255,255,255,0.1)", "rgba(0,0,0,0.1)") // More subtle glass hover
   const statusBg = useColorModeValue("rgba(255,255,255,0.9)", "rgba(20,20,20,0.8)")
   const highlightColor = useColorModeValue("brand.500", "brand.300")
   const cardBorderColor = useColorModeValue("rgba(230,235,240,0.3)", "rgba(60,70,80,0.3)")
@@ -97,6 +99,51 @@ const TransferPage = () => {
   // Quick stats
   const activeTransfers = transfers.filter(t => t.status === "transferring").length
   const completedTransfers = transfers.filter(t => t.status === "completed").length
+  const prevOutgoingActiveTransfersRef = useRef(0);
+  const prevIncomingPendingTransfersRef = useRef(0);
+
+  // Effect to scroll down when a new outgoing transfer starts OR a new incoming offer is received
+  useEffect(() => {
+    const currentOutgoingActiveTransfers = transfers.filter(
+      t => t.direction === "outgoing" && (t.status === "pending" || t.status === "transferring")
+    ).length;
+
+    const currentIncomingPendingTransfers = transfers.filter(
+      t => t.direction === "incoming" && t.status === "pending"
+    ).length;
+
+    const newOutgoingStarted = currentOutgoingActiveTransfers > prevOutgoingActiveTransfersRef.current;
+    const newIncomingOfferReceived = currentIncomingPendingTransfers > prevIncomingPendingTransfersRef.current;
+
+    if (newOutgoingStarted || newIncomingOfferReceived) {
+      // A new relevant transfer event occurred, scroll to bottom immediately
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: document.documentElement.scrollHeight }); // Instant scroll
+      });
+    }
+
+    prevOutgoingActiveTransfersRef.current = currentOutgoingActiveTransfers;
+    prevIncomingPendingTransfersRef.current = currentIncomingPendingTransfers;
+  }, [transfers]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const peerIdFromQr = params.get("connectToPeerId");
+    const sessionNameFromQr = params.get("sessionNameLabel");
+
+    if (peerIdFromQr && peerIdFromQr !== sessionId) { // Use sessionId here
+      // toast({ // Toast notification removed
+      //   title: "Connecting via QR Code",
+      //   description: `Attempting to connect to ${sessionNameFromQr || peerIdFromQr.substring(0,8)}...`,
+      //   status: "info",
+      //   duration: 5000,
+      //   isClosable: true,
+      // });
+      createPeerConnection(peerIdFromQr);
+      // Consider clearing the URL params after processing to avoid re-triggering if not desired
+      // navigate(location.pathname, { replace: true }); // Example using navigate if available
+    }
+  }, [location.search, createPeerConnection, toast, sessionId]); // Use sessionId in dependency array
   
   // Common card styles
   const featureCardStyles = {
@@ -105,13 +152,12 @@ const TransferPage = () => {
     borderWidth: "1px",
     borderColor: cardBorderColor,
     borderRadius: "xl",
-    transition: { duration: 0.3, ease: "easeOut" },
-    _hover: {
-      boxShadow: "xl",
-      borderColor: highlightColor,
-      bg: cardHoverBg,
-      transform: "translateY(-4px)"
-    }
+    transition: { duration: 0.2, ease: "easeOut" }, // Faster: 0.3 -> 0.2
+      _hover: {
+        boxShadow: "xl",
+        bg: cardHoverBg,
+        transform: "translateY(-4px)"
+      }
   }
   
   // Animation variants for consistent transitions
@@ -120,7 +166,7 @@ const TransferPage = () => {
     visible: (delay: number) => ({
       opacity: 1,
       y: 0,
-      transition: { delay, duration: 0.5 }
+      transition: { delay, duration: 0.3 } // Faster: 0.5 -> 0.3
     })
   }
   
@@ -128,7 +174,7 @@ const TransferPage = () => {
     hidden: { opacity: 0 },
     visible: (delay: number) => ({
       opacity: 1,
-      transition: { delay, duration: 0.4 }
+      transition: { delay, duration: 0.25 } // Faster: 0.4 -> 0.25
     })
   }
   
@@ -159,7 +205,7 @@ const TransferPage = () => {
             transform="translate(30%, -30%)"
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.2 }}
-            transition={{ delay: 0.3, duration: 1 }}
+            transition={{ delay: 0.2, duration: 0.7 }} // Faster: delay 0.3->0.2, duration 1->0.7
           />
           
           <Flex direction={{ base: "column", md: "row" }} align="center" justify="space-between">
@@ -306,7 +352,7 @@ const TransferPage = () => {
               transform="translate(-50%, 30%)"
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.15 }}
-              transition={{ delay: 0.5, duration: 1 }}
+              transition={{ delay: 0.3, duration: 0.7 }} // Faster: delay 0.5->0.3, duration 1->0.7
             />
             
             <MotionFlex 
@@ -327,6 +373,9 @@ const TransferPage = () => {
           {/* Available Peers - Spans 5 columns on large screens */}
           <MotionCard
             {...featureCardStyles}
+            _hover={{}}
+            transition={{ duration: 0 }}
+            borderWidth={0} // Remove border for Available Peers
             position={"relative" as any}
             gridColumn={{ lg: "span 5" }}
             initial="hidden"
@@ -340,14 +389,14 @@ const TransferPage = () => {
             right={0}
               height="50%"
               width="50%"
-              bgGradient={secondaryGradient}
+              bgGradient={accentGradient}
               opacity={0.08}
               borderRadius="full"
               filter="blur(40px)"
               transform="translate(30%, -30%)"
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.15 }}
-              transition={{ delay: 0.6, duration: 1 }}
+              transition={{ delay: 0.4, duration: 0.7 }} // Faster: delay 0.6->0.4, duration 1->0.7
             />
             
             <MotionFlex 
@@ -400,7 +449,10 @@ const TransferPage = () => {
         {/* Stats */}
         {transfers.length > 0 && (
           <MotionCard
+            id="transfer-stats"
             {...featureCardStyles}
+            _hover={{}}
+            transition={{ duration: 0 }}
             position={"relative" as any}
             initial="hidden"
             animate="visible"
@@ -420,7 +472,7 @@ const TransferPage = () => {
               transform="translate(30%, 30%)"
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.15 }}
-              transition={{ delay: 0.7, duration: 1 }}
+              transition={{ delay: 0.5, duration: 0.7 }} // Faster: delay 0.7->0.5, duration 1->0.7
             />
             
             <MotionFlex 
@@ -461,7 +513,11 @@ const TransferPage = () => {
 
         {/* Transfer History */}
         <MotionCard
+          id="transfer-history"
           {...featureCardStyles}
+          _hover={{}}
+          transition={{ duration: 0 }}
+          borderWidth={0} // Remove border for Transfer History
           position={"relative" as any}
           initial="hidden"
           animate="visible"
@@ -478,13 +534,13 @@ const TransferPage = () => {
             opacity={0.08}
             borderRadius="full"
             filter="blur(40px)"
-            transform="translate(-30%, -30%)"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.15 }}
-            transition={{ delay: 0.8, duration: 1 }}
-          />
-          
-          <MotionFlex 
+              transform="translate(-30%, -30%)"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.15 }}
+              transition={{ delay: 0.6, duration: 0.7 }} // Faster: delay 0.8->0.6, duration 1->0.7
+            />
+            
+            <MotionFlex 
             align="center" 
             mb={6}
             initial="hidden"

@@ -75,7 +75,7 @@ const DEFAULT_PC_CONFIG: RTCConfiguration = {
     { urls: "stun:stun1.l.google.com:19302" },
     {
       urls: [
-        "turn:openrelay.metered.ca:80", // Added ?transport=udp if needed, but often auto-negotiates
+        "turn:openrelay.metered.ca:80",
         "turn:openrelay.metered.ca:443"
       ],
       username: "openrelayproject",
@@ -475,6 +475,26 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
   sendFiles: async (peerId: string) => {
     console.log(`[WebRTC] sendFiles called for peerId: ${peerId}`);
     const { peerConnections, selectedFiles } = get();
+    
+    // Auto-scroll to transfer stats and history when transfer starts
+    setTimeout(() => {
+      const statsElement = document.getElementById('transfer-stats');
+      const historyElement = document.getElementById('transfer-history');
+      
+      if (statsElement) {
+        statsElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Scroll a bit further to account for fixed headers
+        window.scrollBy(0, -50);
+      }
+      
+      if (historyElement) {
+        // Longer delay between scrolls to ensure both sections are visible
+        setTimeout(() => {
+          historyElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          window.scrollBy(0, -50);
+        }, 500);
+      }
+    }, 100);
     const connection = peerConnections.get(peerId);
 
     if (!connection) {

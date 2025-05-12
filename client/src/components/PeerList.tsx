@@ -29,8 +29,8 @@ const PeerList = () => {
       align="stretch"
       bg={bgColor}
       borderRadius="xl"
-      border="1px solid"
-      borderColor={borderColor}
+      border="none" // Remove this border
+      borderColor={borderColor} // borderColor will no longer have an effect
       p={4}
       height="100%"
       minH="300px"
@@ -46,7 +46,7 @@ const PeerList = () => {
       ) : (
         <VStack spacing={3} align="stretch" overflowY="auto">
           {peers.map((peerId) => (
-            <MotionBox key={peerId} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+            <Box key={peerId}>
               <HStack p={3} borderRadius="lg" bg={peerItemBgColor} justify="space-between" boxShadow="sm">
                 <HStack>
                   <Avatar size="sm" name={`Peer ${peerId.substring(0, 4)}`} bg="brand.400" />
@@ -61,14 +61,32 @@ const PeerList = () => {
                 <Button
                   size="sm"
                   leftIcon={<Send size={14} />}
-                  colorScheme="brand"
+                  variant="solid"
+                  bg={useColorModeValue("brand.50", "brand.900")}
+                  color={useColorModeValue("brand.600", "brand.100")}
+                  border="1px solid"
+                  borderColor={useColorModeValue("brand.200", "brand.700")}
+                  _hover={{
+                    bg: useColorModeValue("brand.100", "brand.800"),
+                    transform: "translateY(-1px)",
+                    boxShadow: "sm"
+                  }}
+                  _active={{
+                    bg: useColorModeValue("brand.200", "brand.700"),
+                    transform: "translateY(0)"
+                  }}
+                  _disabled={{
+                    opacity: 0.5,
+                    cursor: "not-allowed"
+                  }}
+                  transition="all 0.2s ease"
                   isDisabled={selectedFiles.length === 0}
                   onClick={() => handleSendFiles(peerId)}
                 >
                   Send
                 </Button>
               </HStack>
-            </MotionBox>
+            </Box>
           ))}
         </VStack>
       )}

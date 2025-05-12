@@ -48,8 +48,8 @@ const TransferList = () => {
       align="stretch"
       bg={bgColor}
       borderRadius="xl"
-      border="1px solid"
-      borderColor={borderColor}
+      border="none" // Remove this border
+      borderColor={borderColor} // borderColor will no longer have an effect
       p={4}
       height="100%"
       minH="300px"
@@ -70,7 +70,7 @@ const TransferList = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: 0.2 }} // Faster: 0.3 -> 0.2
             >
               <VStack p={4} borderRadius="lg" bg={itemBgColor} align="stretch" spacing={3} boxShadow="sm">
                 <HStack justify="space-between">
@@ -96,6 +96,8 @@ const TransferList = () => {
                       leftIcon={<Download size={14} />}
                       colorScheme="green"
                       onClick={() => acceptTransfer(transfer.fileId)}
+                      _hover={{ filter: "brightness(95%)", transform: "translateY(-1px)" }}
+                      transition="all 0.2s ease-out"
                     >
                       Accept
                     </Button>
@@ -139,6 +141,8 @@ const TransferList = () => {
                             icon={<Download size={16} />}
                             size="xs"
                             colorScheme="green"
+                            _hover={{ filter: "brightness(95%)", transform: "translateY(-1px)" }}
+                            transition="all 0.2s ease-out"
                             onClick={() => {
                               if (transfer.fileBlob) {
                                 const url = URL.createObjectURL(transfer.fileBlob);

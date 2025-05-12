@@ -46,9 +46,13 @@ const styles = {
     const dark = mode(false, true)(props)
     return {
       // keyframes for shine sweep
+      "@keyframes pulse": {
+        "0%, 100%": { transform: "scale(1)" },
+        "50%": { transform: "scale(1.05)" },
+      },
       "@keyframes shine": {
-        "0%":   { transform: "translate(-200%, -50%) rotate(25deg)" },
-        "100%": { transform: "translate(200%, -50%) rotate(25deg)" },
+        "0%":   { transform: "translate(-100%, -50%) rotate(25deg)" },
+        "100%": { transform: "translate(100%, -50%) rotate(25deg)" },
       },
       // keyframes for animated background gradient
       "@keyframes bgGradient": {
@@ -111,15 +115,64 @@ const components = {
     },
     variants: {
       ghostGlass: (props: StyleFunctionProps) => ({
-        bg: mode("glass.200", "glass.300")(props),
+        bg: mode("rgba(255,255,255,0.2)", "rgba(0,0,0,0.2)")(props),
         color: mode("brand.800", "whiteAlpha.900")(props),
         backdropFilter: "blur(12px)",
+        pointerEvents: "auto",
+        border: "1px solid",
+        borderColor: mode("rgba(0,0,0,0.1)", "rgba(255,255,255,0.1)")(props),
+        position: "relative",
+        overflow: "hidden",
         _hover: {
-          bg: mode("glass.300", "glass.400")(props),
-          transform: "scale(1.02)",
+          bg: mode("rgba(255,255,255,0.3)", "rgba(0,0,0,0.3)")(props),
         },
         _active: {
-          bg: mode("glass.400", "glass.500")(props),
+          bg: mode("rgba(255,255,255,0.4)", "rgba(0,0,0,0.4)")(props),
+        },
+      }),
+      startSharing: (props: StyleFunctionProps) => ({
+        bg: mode("rgba(255,255,255,0.2)", "rgba(0,0,0,0.2)")(props),
+        color: mode("brand.800", "whiteAlpha.900")(props),
+        backdropFilter: "blur(12px)",
+        pointerEvents: "auto",
+        border: "1px solid",
+        borderColor: mode("rgba(0,0,0,0.1)", "rgba(255,255,255,0.1)")(props),
+        position: "relative",
+        overflow: "hidden",
+        _hover: {
+          bg: mode("rgba(255,255,255,0.3)", "rgba(0,0,0,0.3)")(props),
+        },
+        animation: "pulse 1.5s ease-in-out infinite",
+        _active: {
+          bg: mode("rgba(255,255,255,0.4)", "rgba(0,0,0,0.4)")(props),
+        },
+        _before: {
+          content: '""',
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          background: mode(
+            "linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0) 100%)",
+            "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0) 100%)"
+          )(props),
+          animation: "shine 2s linear infinite",
+          pointerEvents: "none",
+        },
+      }),
+      qrGlass: (props: StyleFunctionProps) => ({
+        bg: mode("rgba(100,100,120,0.1)", "rgba(100,100,120,0.1)")(props),
+        color: mode("gray.800", "whiteAlpha.900")(props),
+        backdropFilter: "blur(8px)",
+        pointerEvents: "auto",
+        border: "1px solid",
+        borderColor: mode("rgba(100,100,120,0.15)", "rgba(100,100,120,0.15)")(props),
+        _hover: {
+          bg: mode("rgba(100,100,120,0.15)", "rgba(100,100,120,0.15)")(props),
+        },
+        _active: {
+          bg: mode("rgba(100,100,120,0.2)", "rgba(100,100,120,0.2)")(props),
         },
       }),
       solid: (props: StyleFunctionProps) => ({

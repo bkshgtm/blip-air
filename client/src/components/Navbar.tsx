@@ -11,13 +11,14 @@ import {
   MenuButton,
   MenuList,
   MenuItem,
-  useDisclosure,
+  // useDisclosure, // Removed
   useColorModeValue,
 } from "@chakra-ui/react"
 import { motion } from "framer-motion"
 import { Home, FileUp, Settings, Menu as MenuIcon, QrCode } from "lucide-react"
 import { useSettingsStore } from "../store/settingsStore"
-import QRCodeModal from "./QRCodeModal"
+import { useUiStore } from "../store/uiStore" // Added
+// import QRCodeModal from "./QRCodeModal" // Removed
 
 const MotionFlex = motion(Flex)
 const MotionIconButton = motion(IconButton)
@@ -27,7 +28,7 @@ const Navbar = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { sessionName } = useSettingsStore()
-  const { isOpen, onOpen, onClose } = useDisclosure()
+  const { openQrCodeModal } = useUiStore() // Use uiStore
 
   const isActive = (path: string) => location.pathname === path
 
@@ -49,7 +50,7 @@ const Navbar = () => {
         justify="space-between"
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.3 }} // Faster: 0.5 -> 0.3
       >
         {/* Logo & Session */}
         <HStack spacing={2} align="center">
@@ -105,7 +106,7 @@ const Navbar = () => {
             colorScheme="brand"
             aria-label="Show QR Code"
             icon={<QrCode />}
-            onClick={onOpen}
+            onClick={openQrCodeModal} // Use openQrCodeModal from uiStore
             borderRadius="xl"
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.95 }}
@@ -133,7 +134,7 @@ const Navbar = () => {
                   {item.name}
                 </MenuItem>
               ))}
-              <MenuItem icon={<QrCode />} onClick={onOpen}>
+              <MenuItem icon={<QrCode />} onClick={openQrCodeModal}> {/* Use openQrCodeModal from uiStore */}
                 Show QR Code
               </MenuItem>
             </MenuList>
@@ -141,7 +142,7 @@ const Navbar = () => {
         </Box>
       </MotionFlex>
 
-      <QRCodeModal isOpen={isOpen} onClose={onClose} />
+      {/* QRCodeModal is now rendered in Layout.tsx */}
     </>
   )
 }

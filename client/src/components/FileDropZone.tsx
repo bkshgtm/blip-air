@@ -58,34 +58,41 @@ const FileDropZone = () => {
   return (
     <VStack spacing={4} width="100%">
       <MotionBox
-        {...getRootProps()}
         width="100%"
         height={selectedFiles.length > 0 ? "auto" : "200px"}
         bg={bgColor}
         borderRadius="xl"
-        border="2px dashed"
-        borderColor={isDragging ? activeBorderColor : borderColor}
+        border="none" // Dashed border removed as per request
+        // borderColor for animate prop is still here but won't be visible without a border
         p={4}
-        display="flex"
-        alignItems="center"
-        justifyContent="center"
-        cursor={selectedFiles.length > 0 ? "default" : "pointer"}
-        transition="all 0.2s"
+        transition={{ duration: 0.15 }} // Faster: 0.2 -> 0.15
         animate={{
-          borderColor: isDragging ? activeBorderColor : borderColor,
+          // Animate borderColor for potential future use, or if a subtle bg change on drag is desired
+          borderColor: isDragging ? activeBorderColor : borderColor, 
           scale: isDragging ? 1.02 : 1,
         }}
         whileHover={selectedFiles.length === 0 ? { scale: 1.01 } : {}}
+        // Note: display, alignItems, justifyContent, cursor moved to inner Box
       >
-        <input {...getInputProps()} />
+        <Box
+          {...getRootProps()}
+          width="100%"
+          height="100%"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          cursor={selectedFiles.length > 0 ? "default" : "pointer"}
+          borderRadius="inherit" // Inherit border radius for click area consistency
+        >
+          <input {...getInputProps()} />
 
-        {selectedFiles.length === 0 ? (
-          <VStack spacing={2}>
-            <Icon as={Upload} boxSize={10} color="brand.400" />
-            <Text textAlign="center">Drag and drop files here, or click to select files</Text>
-          </VStack>
-        ) : (
-          <VStack width="100%" spacing={4}>
+          {selectedFiles.length === 0 ? (
+            <VStack spacing={2} pointerEvents="none"> {/* Prevent VStack from capturing dropzone events */}
+              <Icon as={Upload} boxSize={10} color="brand.400" />
+              <Text textAlign="center">Drag and drop files here, or click to select files</Text>
+            </VStack>
+          ) : (
+            <VStack width="100%" spacing={4}>
             <HStack width="100%" justifyContent="space-between">
               <Text fontWeight="bold">Selected Files ({selectedFiles.length})</Text>
               <Button size="sm" variant="outline" onClick={clearFiles}>
@@ -132,6 +139,18 @@ const FileDropZone = () => {
             <Button
               leftIcon={<Upload size={16} />}
               size="sm"
+              variant="outline"
+              borderColor={useColorModeValue("gray.300", "gray.600")}
+              color={useColorModeValue("gray.700", "gray.200")}
+              _hover={{
+                bg: useColorModeValue("brand.100", "brand.800"),
+                borderColor: useColorModeValue("brand.400", "brand.300"),
+                color: useColorModeValue("brand.600", "brand.200")
+              }}
+              _active={{
+                bg: useColorModeValue("brand.200", "brand.700")
+              }}
+              transition="all 0.2s ease"
               onClick={(e) => {
                 e.stopPropagation()
                 open()
@@ -141,6 +160,7 @@ const FileDropZone = () => {
             </Button>
           </VStack>
         )}
+        </Box> {/* Close the inner Box component */}
       </MotionBox>
     </VStack>
   )
