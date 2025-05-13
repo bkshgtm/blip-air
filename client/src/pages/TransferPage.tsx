@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, lazy, Suspense, useMemo } from "react"
+import { useMobile } from "../components/ui/use-mobile"
 import { useLocation } from "react-router-dom"
 import {
   Container,
@@ -16,12 +17,14 @@ import {
   useColorModeValue,
 } from "@chakra-ui/react"
 import { motion } from "framer-motion"
-import { FileUp, Download, Users, Activity, Shield } from "lucide-react"
+import { FileUp, Download, Users, Activity } from "lucide-react"
 import GlassCard from "../components/GlassCard"
 import FileDropZone from "../components/FileDropZone"
-import PeerList from "../components/PeerList"
-import TransferList from "../components/TransferList"
 import TransferStats from "../components/TransferStats"
+import { Spinner } from "@chakra-ui/react"
+
+const PeerList = lazy(() => import("../components/PeerList"))
+const TransferList = lazy(() => import("../components/TransferList"))
 import { useSocketStore } from "../store/socketStore"
 import { useWebRTCStore } from "../store/webrtcStore"
 import { useSettingsStore } from "../store/settingsStore"
@@ -130,14 +133,21 @@ const TransferPage = () => {
     },
   }
 
-  const cardVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: (delay: number) => ({
-      opacity: 1,
-      y: 0,
-      transition: { delay, duration: 0.3 },
-    }),
-  }
+  const cardVariants = useMemo(() => {
+    const isMobile = useMobile()
+    return {
+      hidden: { opacity: 0, y: isMobile ? 0 : 20 },
+      visible: (delay: number) => ({
+        opacity: 1,
+        y: 0,
+        transition: {
+          delay,
+          duration: isMobile ? 0.15 : 0.3,
+          type: isMobile ? "tween" : "spring",
+        },
+      }),
+    }
+  }, [useMobile])
 
   const headingVariants = {
     hidden: { opacity: 0 },
@@ -245,21 +255,23 @@ const TransferPage = () => {
             custom={0.3}
             variants={cardVariants}
           >
-            <MotionBox
-              position={"absolute" as any}
-              bottom={0}
-              left="50%"
-              height="80%"
-              width="80%"
-              bgGradient={accentGradient}
-              opacity={0.08}
-              borderRadius="3xl"
-              filter="blur(60px)"
-              transform="translate(-50%, 30%)"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.15 }}
-              transition={{ delay: 0.3, duration: 0.7 }}
-            />
+            {!useMobile() && (
+              <MotionBox
+                position={"absolute" as any}
+                bottom={0}
+                left="50%"
+                height="80%"
+                width="80%"
+                bgGradient={accentGradient}
+                opacity={0.08}
+                borderRadius="3xl"
+                filter="blur(60px)"
+                transform="translate(-50%, 30%)"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 0.15 }}
+                transition={{ delay: 0.3, duration: 0.7 }}
+              />
+            )}
 
             <MotionFlex
               align="center"
@@ -318,7 +330,9 @@ const TransferPage = () => {
             <Text mb={2} fontSize="sm" opacity={0.8}>
               Your Name: {sessionName}
             </Text>
-            <PeerList />
+            <Suspense fallback={<Spinner />}>
+              <PeerList />
+            </Suspense>
 
             <Box mt={4} className="custom-peer-styling">
               <style>{`
@@ -450,7 +464,9 @@ const TransferPage = () => {
             <Heading size="md">Transfer History</Heading>
           </MotionFlex>
 
-          <TransferList />
+          <Suspense fallback={<Spinner />}>
+            <TransferList />
+          </Suspense>
 
           <Box mt={4} className="custom-transfer-styling">
             <style>{`

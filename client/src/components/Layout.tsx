@@ -1,12 +1,13 @@
 "use client"
 
-import { type ReactNode, useEffect } from "react"
-import { Box, Flex, useColorMode } from "@chakra-ui/react"
+import { type ReactNode, useEffect, lazy, Suspense } from "react"
+import { Box, Flex, useColorMode, Spinner } from "@chakra-ui/react"
 import { useSettingsStore } from "../store/settingsStore"
 import { useUiStore } from "../store/uiStore"
 import Navbar from "./Navbar"
-import QRCodeModal from "./QRCodeModal"
 import { AnimatePresence, motion } from "framer-motion"
+
+const QRCodeModal = lazy(() => import("./QRCodeModal"))
 
 interface LayoutProps {
   children: ReactNode
@@ -40,7 +41,10 @@ const Layout = ({ children }: LayoutProps) => {
           {children}
         </MotionBox>
       </AnimatePresence>
-      <QRCodeModal isOpen={isQrCodeModalOpen} onClose={closeQrCodeModal} />
+
+      <Suspense fallback={<Spinner />}>
+        {isQrCodeModalOpen && <QRCodeModal isOpen={isQrCodeModalOpen} onClose={closeQrCodeModal} />}
+      </Suspense>
     </Flex>
   )
 }
