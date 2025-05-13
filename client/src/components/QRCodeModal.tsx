@@ -86,18 +86,7 @@ const QRCodeModal = ({ isOpen, onClose }: QRCodeModalProps) => {
               borderRadius="xl"
               boxShadow="md"
             >
-              <QRCodeSVG
-                value={qrValue}
-                size={200}
-                level="H"
-                includeMargin
-                imageSettings={{
-                  src: "/logo.png",
-                  height: 40,
-                  width: 40,
-                  excavate: true,
-                }}
-              />
+              <QRCodeSVG value={qrValue} size={200} level="H" includeMargin />
             </MotionBox>
             <VStack spacing={1}>
               <Text fontWeight="bold">Session: {sessionName}</Text>

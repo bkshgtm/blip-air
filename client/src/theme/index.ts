@@ -73,31 +73,6 @@ const styles = {
         backgroundSize: "300% 300%, cover",
         animation: "bgGradient 20s ease infinite",
         backgroundAttachment: "fixed",
-        _before: {
-          content: '""',
-          position: "fixed",
-          inset: 0,
-          zIndex: -1,
-          pointerEvents: "none",
-          backgroundImage: `
-            repeating-linear-gradient(
-              0deg,
-              rgba(255,255,255,0.04) 0,
-              rgba(255,255,255,0.04) 1px,
-              transparent 1px,
-              transparent 24px
-            ),
-            repeating-linear-gradient(
-              90deg,
-              rgba(255,255,255,0.04) 0,
-              rgba(255,255,255,0.04) 1px,
-              transparent 1px,
-              transparent 24px
-            )
-          `,
-          backgroundSize: "24px 24px",
-          opacity: dark ? 0.2 : 0.1,
-        },
       },
       "::selection": {
         backgroundColor: mode("brand.200", "brand.700")(props),

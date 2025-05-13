@@ -43,7 +43,7 @@ const Navbar = () => {
         <HStack spacing={2} align="center">
           <MotionBox whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
             <Text fontSize="2xl" fontWeight="extrabold" bgGradient="linear(to-r, brand.500, brand.400)" bgClip="text">
-              P2P Share
+              BlipAir
             </Text>
           </MotionBox>
           <Text fontSize="sm" opacity={0.7}>
@@ -99,7 +99,16 @@ const Navbar = () => {
         <Box display={{ base: "block", md: "none" }}>
           <Menu>
             <MenuButton as={IconButton} variant="ghostGlass" aria-label="Open menu" icon={<MenuIcon />} />
-            <MenuList border="none" boxShadow="lg">
+            <MenuList
+              border="none"
+              boxShadow="lg"
+              bg="rgba(255,255,255,0.0)"
+              _dark={{ bg: "rgba(0,0,0,0.5)" }}
+              backdropFilter="blur(20px)"
+              borderRadius="xl"
+              py={2}
+              zIndex="popover"
+            >
               {navItems.map((item) => (
                 <MenuItem
                   key={item.name}

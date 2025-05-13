@@ -24,12 +24,14 @@ const Layout = ({ children }: LayoutProps) => {
   }, [darkMode, setColorMode])
 
   return (
-    <Flex direction="column" minH="100vh">
+    <Flex direction="column" minH="100vh" position="relative">
       <Navbar />
       <AnimatePresence mode="wait">
         <MotionBox
           flex="1"
           p={4}
+          position="relative"
+          zIndex="1"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}

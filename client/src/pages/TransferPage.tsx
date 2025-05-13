@@ -27,10 +27,8 @@ import { useWebRTCStore } from "../store/webrtcStore"
 import { useSettingsStore } from "../store/settingsStore"
 
 const MotionCard = motion(GlassCard)
-const MotionHeading = motion(Heading)
 const MotionBox = motion(Box)
 const MotionFlex = motion(Flex)
-const MotionText = motion(Text)
 
 const TransferPage = () => {
   const toast = useToast({ position: "bottom" })
@@ -152,9 +150,9 @@ const TransferPage = () => {
   return (
     <Container maxW="container.xl" py={10}>
       <VStack spacing={10} align="stretch">
-        {/* Header Section */}
+        {/* Connection Status */}
         <MotionCard
-          p={8}
+          p={4}
           borderRadius="xl"
           initial="hidden"
           animate="visible"
@@ -162,96 +160,37 @@ const TransferPage = () => {
           variants={cardVariants}
           overflow="hidden"
           position={"relative" as any}
+          maxWidth="fit-content"
+          mx="auto"
         >
-          <MotionBox
-            position={"absolute" as any}
-            top={0}
-            right={0}
-            height="100%"
-            width="40%"
-            bgGradient={accentGradient}
-            opacity={0.1}
-            borderRadius="full"
-            filter="blur(60px)"
-            transform="translate(30%, -30%)"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.2 }}
-            transition={{ delay: 0.2, duration: 0.7 }}
-          />
-
-          <Flex direction={{ base: "column", md: "row" }} align="center" justify="space-between">
-            <Box>
-              <MotionHeading
-                size="xl"
-                bgGradient={accentGradient}
-                bgClip="text"
-                mb={2}
-                initial="hidden"
-                animate="visible"
-                custom={0.2}
-                variants={headingVariants}
-              >
-                Secure File Transfer
-              </MotionHeading>
-
-              <MotionText
-                opacity={0.8}
-                mb={4}
-                maxW="lg"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 0.8 }}
-                transition={{ delay: 0.4 }}
-              >
-                Send files directly over your LAN with end-to-end encryption — no size limits, no middlemen, complete
-                privacy.
-              </MotionText>
-            </Box>
-
-            <MotionFlex
-              align="center"
-              bg={statusBg}
-              p={3}
+          <MotionFlex
+            align="center"
+            justify="center"
+            bg={statusBg}
+            p={2}
+            borderRadius="2xl"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.2, duration: 0.4 }}
+            boxShadow="md"
+            width="100%"
+          >
+            <Badge
+              colorScheme={isConnected && sessionId ? "green" : "red"}
+              variant="solid"
               borderRadius="2xl"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.6, duration: 0.4 }}
-              boxShadow="md"
+              px={3}
+              py={1}
             >
-              <Badge
-                colorScheme={isConnected && sessionId ? "green" : "red"}
-                variant="solid"
-                borderRadius="2xl"
-                px={3}
-                py={1}
-              >
-                {isConnected && sessionId ? "Connected" : "Disconnected"}
-              </Badge>
+              {isConnected && sessionId ? "Connected" : "Disconnected"}
+            </Badge>
 
-              {isConnected && sessionId && (
-                <Text ml={3} fontSize="sm" opacity={0.8}>
-                  Session ID: {sessionId.slice(0, 8)}...
-                </Text>
-              )}
-            </MotionFlex>
-          </Flex>
-
-          {!isConnected && (
-            <Box p={4} bg="red.500" color="white" borderRadius="xl" mt={4}>
-              <Flex align="center">
-                <Icon as={Shield} mr={2} />
-                <Text>Not connected to signaling server. Please check your network.</Text>
-              </Flex>
-            </Box>
-          )}
-
-          {isConnected && !sessionId && (
-            <Box p={4} bg="yellow.500" color="white" borderRadius="xl" mt={4}>
-              <Flex align="center">
-                <Icon as={Activity} mr={2} />
-                <Text>Connecting to signaling server...</Text>
-              </Flex>
-            </Box>
-          )}
+            {isConnected && sessionId && (
+              <Text ml={3} fontSize="sm" opacity={0.8}>
+                Session ID: {sessionId.slice(0, 8)}...
+              </Text>
+            )}
+          </MotionFlex>
         </MotionCard>
 
         {/* Quick Stats Bar */}

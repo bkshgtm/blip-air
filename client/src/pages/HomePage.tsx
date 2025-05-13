@@ -52,22 +52,36 @@ const HomePage = () => {
           <MotionBox initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
             <VStack spacing={6} textAlign="center">
               <MotionHeading
-                size="2xl"
-                bgGradient="linear(to-r, brand.600, brand.400)"
+                fontSize={{ base: "4xl", md: "6xl" }}
+                fontWeight="black"
+                letterSpacing="tighter"
+                bgGradient="linear(to-r, brand.300, brand.400, brand.600)"
                 bgClip="text"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.15, duration: 0.3 }}
+                initial={{ opacity: 0, y: -20 }}
+                animate={{
+                  opacity: 1,
+                  y: 0,
+                  textShadow: [
+                    "0 0 8px rgba(99, 102, 241, 0)",
+                    "0 0 12px rgba(255, 255, 255, 0.3)",
+                    "0 0 8px rgba(99, 102, 241, 0)",
+                  ],
+                }}
+                transition={{
+                  delay: 0.3,
+                  duration: 1,
+                  ease: "easeInOut",
+                }}
               >
-                Secure P2P File Sharing
+                BLIPAIR
               </MotionHeading>
               <MotionText
-                fontSize="lg"
+                fontSize="sm"
                 maxW="2xl"
                 opacity={0.8}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 0.25, duration: 0.3 }}
+                transition={{ delay: 1, duration: 0.3 }}
               >
                 Send files directly between devices with matte-black glass panels, moving gradients, and end-to-end
                 encryption—works anywhere with automatic connectivity assistance.

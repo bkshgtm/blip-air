@@ -90,9 +90,9 @@ const SettingsPage: React.FC = () => {
                     onChange={(e) => setSessionName(e.target.value)}
                     placeholder="Enter a name for your session"
                     variant="filled"
-                    bg="rgba(255,255,255,0.06)"
-                    _hover={{ bg: "rgba(255,255,255,0.1)" }}
-                    color="white"
+                    bg={useColorModeValue("rgba(0,0,0,0.06)", "rgba(255,255,255,0.06)")}
+                    _hover={{ bg: useColorModeValue("rgba(0,0,0,0.1)", "rgba(255,255,255,0.1)") }}
+                    color={useColorModeValue("gray.800", "whiteAlpha.900")}
                   />
                 </FormControl>
 
@@ -104,9 +104,9 @@ const SettingsPage: React.FC = () => {
                     placeholder="Enter a PIN for secure connections"
                     maxLength={4}
                     variant="filled"
-                    bg="rgba(255,255,255,0.06)"
-                    _hover={{ bg: "rgba(255,255,255,0.1)" }}
-                    color="white"
+                    bg={useColorModeValue("rgba(0,0,0,0.06)", "rgba(255,255,255,0.06)")}
+                    _hover={{ bg: useColorModeValue("rgba(0,0,0,0.1)", "rgba(255,255,255,0.1)") }}
+                    color={useColorModeValue("gray.800", "whiteAlpha.900")}
                   />
                   <Text fontSize="sm" color="whiteAlpha.600" mt={1}>
                     Required for other devices to connect
