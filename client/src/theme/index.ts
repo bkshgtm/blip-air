@@ -1,4 +1,3 @@
-// theme/index.ts
 import { extendTheme } from "@chakra-ui/react"
 import { mode } from "@chakra-ui/theme-tools"
 import type { StyleFunctionProps } from "@chakra-ui/styled-system"
@@ -45,27 +44,26 @@ const styles = {
   global: (props: StyleFunctionProps) => {
     const dark = mode(false, true)(props)
     return {
-      // keyframes for shine sweep
       "@keyframes pulse": {
         "0%, 100%": { transform: "scale(1)" },
         "50%": { transform: "scale(1.05)" },
       },
       "@keyframes shine": {
-        "0%":   { transform: "translate(-100%, -50%) rotate(25deg)" },
+        "0%": { transform: "translate(-100%, -50%) rotate(25deg)" },
         "100%": { transform: "translate(100%, -50%) rotate(25deg)" },
       },
-      // keyframes for animated background gradient
+
       "@keyframes bgGradient": {
         "0%, 100%": { backgroundPosition: "0% 50%" },
-        "50%":      { backgroundPosition: "100% 50%" },
+        "50%": { backgroundPosition: "100% 50%" },
       },
       html: {
-        bg: dark ? colors.matte[200] : "white", // Match body background
-        minHeight: "100%", // Ensure html also covers full height
+        bg: dark ? colors.matte[200] : "white",
+        minHeight: "100%",
       },
       body: {
         position: "relative",
-        bg: dark ? colors.matte[200] : "white", // This will now inherit from html or can be set explicitly
+        bg: dark ? colors.matte[200] : "white",
         color: mode("gray.800", "gray.100")(props),
         minHeight: "100vh",
         backgroundImage: dark
@@ -113,16 +111,14 @@ const components = {
   Menu: {
     baseStyle: (props: StyleFunctionProps) => ({
       list: {
-        // Apply glassmorphism directly to the MenuList part
-        bg: mode("rgba(255, 255, 255, 0.75)", "rgba(24, 24, 24, 0.75)")(props), // Light: 75% white, Dark: 75% of #181818
+        bg: mode("rgba(255, 255, 255, 0.75)", "rgba(24, 24, 24, 0.75)")(props),
         backdropFilter: "saturate(180%) blur(12px)",
         border: "1px solid",
-        borderColor: mode("rgba(255,255,255,0.12)", "rgba(255,255,255,0.12)")(props), // Match glass.300
-        borderRadius: "xl", // Softer than default menu, closer to cards
-        boxShadow: "lg", // Standard shadow
+        borderColor: mode("rgba(255,255,255,0.12)", "rgba(255,255,255,0.12)")(props),
+        borderRadius: "xl",
+        boxShadow: "lg",
       },
       item: {
-        // Ensure items have transparent background to show list's glass effect
         bg: "transparent",
         _hover: {
           bg: mode("whiteAlpha.200", "whiteAlpha.100")(props),
@@ -182,7 +178,7 @@ const components = {
           height: "100%",
           background: mode(
             "linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0) 100%)",
-            "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0) 100%)"
+            "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0) 100%)",
           )(props),
           animation: "shine 2s linear infinite",
           pointerEvents: "none",
@@ -215,8 +211,7 @@ const components = {
 
 const layerStyles = {
   glass: (props: StyleFunctionProps) => ({
-    // Using a more opaque base for the glass effect
-    bg: mode("rgba(255, 255, 255, 0.65)", "rgba(24, 24, 24, 0.65)")(props), // Light: 65% white, Dark: 65% of #181818 (matte.300)
+    bg: mode("rgba(255, 255, 255, 0.65)", "rgba(24, 24, 24, 0.65)")(props),
     backdropFilter: "saturate(180%) blur(12px)",
     border: "1px solid",
     borderColor: mode("glass.200", "glass.300")(props),
@@ -234,8 +229,7 @@ const layerStyles = {
       left: "-50%",
       width: "200%",
       height: "200%",
-      bgGradient:
-        "linear(to-r, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 60%)",
+      bgGradient: "linear(to-r, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 60%)",
       transform: "rotate(25deg)",
       filter: "blur(30px)",
       animation: "shine 3s infinite",
@@ -256,6 +250,6 @@ export default extendTheme({
   },
   shadows: {
     outline: "0 0 0 3px rgba(255,255,255,0.24)",
-    md:      "0 8px 16px rgba(0,0,0,0.4)",
+    md: "0 8px 16px rgba(0,0,0,0.4)",
   },
 })

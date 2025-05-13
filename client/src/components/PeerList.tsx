@@ -1,7 +1,7 @@
 "use client"
 
-import { Box, Text, VStack, HStack, Avatar, Button, useColorModeValue, Badge, Divider, Heading } from "@chakra-ui/react"
-import { Send } from "lucide-react"
+import { Box, Text, VStack, HStack, Button, useColorModeValue, Badge, Divider, Heading, Icon } from "@chakra-ui/react"
+import { Send, UserCircle } from "lucide-react" // Added UserCircle
 import { useSocketStore } from "../store/socketStore"
 import { useWebRTCStore } from "../store/webrtcStore"
 
@@ -52,7 +52,8 @@ const PeerList = () => {
             <Box key={peer.id}>
               <HStack p={3} borderRadius="lg" bg={peerItemBgColor} justify="space-between" boxShadow="sm">
                 <HStack>
-                  <Avatar size="sm" name={peer.name} bg="brand.400" />
+                  {/* Replace Avatar with a generic icon */}
+                  <Icon as={UserCircle} w={6} h={6} color={`hsl(${peer.id.charCodeAt(0) % 360}, 70%, 70%)`} />
                   <VStack align="start" spacing={0}>
                     <Text fontWeight="medium">{peer.name}</Text>
                     <Badge colorScheme="green" variant="subtle" fontSize="xs">

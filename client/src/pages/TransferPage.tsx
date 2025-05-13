@@ -24,6 +24,7 @@ import TransferList from "../components/TransferList"
 import TransferStats from "../components/TransferStats"
 import { useSocketStore } from "../store/socketStore"
 import { useWebRTCStore } from "../store/webrtcStore"
+import { useSettingsStore } from "../store/settingsStore"
 
 const MotionCard = motion(GlassCard)
 const MotionHeading = motion(Heading)
@@ -32,8 +33,9 @@ const MotionFlex = motion(Flex)
 const MotionText = motion(Text)
 
 const TransferPage = () => {
-  const toast = useToast({ position: "bottom" }) // Changed position to bottom
+  const toast = useToast({ position: "bottom" })
   const { isConnected, sessionId, peers } = useSocketStore()
+  const { sessionName } = useSettingsStore()
   const { transfers, createPeerConnection } = useWebRTCStore()
   const location = useLocation()
 
@@ -49,11 +51,10 @@ const TransferPage = () => {
   const highlightColor = useColorModeValue("brand.500", "brand.300")
   const cardBorderColor = useColorModeValue("rgba(230,235,240,0.3)", "rgba(60,70,80,0.3)")
   const softBgHover = useColorModeValue("rgba(245,248,252,0.5)", "rgba(30,35,45,0.5)")
-  const peerListBorderColor = useColorModeValue("rgba(230,235,240,0.2)", "rgba(60,70,80,0.2)") // Moved hook call
-  const statsSeparatorBg = useColorModeValue("rgba(230,235,240,0.4)", "rgba(60,70,80,0.4)") // Moved hook call
-  const transferListBorderColor = useColorModeValue("rgba(230,235,240,0.2)", "rgba(60,70,80,0.2)") // Moved hook call
+  const peerListBorderColor = useColorModeValue("rgba(230,235,240,0.2)", "rgba(60,70,80,0.2)")
+  const statsSeparatorBg = useColorModeValue("rgba(230,235,240,0.4)", "rgba(60,70,80,0.4)")
+  const transferListBorderColor = useColorModeValue("rgba(230,235,240,0.2)", "rgba(60,70,80,0.2)")
 
-  // Notifications
   useEffect(() => {
     const done = transfers.filter((t) => t.status === "completed" && !t._notified)
     const failed = transfers.filter((t) => t.status === "error" && !t._notified)
@@ -65,7 +66,6 @@ const TransferPage = () => {
         status: "success",
         duration: 5000,
         isClosable: true,
-        // motionPreset: "none" // Removed incorrect option
       })
       t._notified = true
     })
@@ -77,7 +77,6 @@ const TransferPage = () => {
         status: "error",
         duration: 5000,
         isClosable: true,
-        // motionPreset: "none" // Removed incorrect option
       })
       t._notified = true
     })
@@ -102,7 +101,7 @@ const TransferPage = () => {
 
     if (newOutgoingStarted || newIncomingOfferReceived) {
       requestAnimationFrame(() => {
-        window.scrollTo({ top: document.documentElement.scrollHeight }) // Instant scroll
+        window.scrollTo({ top: document.documentElement.scrollHeight })
       })
     }
 
@@ -119,7 +118,6 @@ const TransferPage = () => {
     }
   }, [location.search, createPeerConnection, toast, sessionId])
 
-  // Common card styles
   const featureCardStyles = {
     p: 8,
     overflow: "hidden",
@@ -299,7 +297,6 @@ const TransferPage = () => {
 
         {/* Main Content Grid */}
         <SimpleGrid columns={{ base: 1, lg: 12 }} spacing={6}>
-          {/* Drop Zone - Spans 7 columns on large screens */}
           <MotionCard
             {...featureCardStyles}
             position={"relative" as any}
@@ -340,7 +337,6 @@ const TransferPage = () => {
             <FileDropZone />
           </MotionCard>
 
-          {/* Available Peers - Spans 5 columns on large screens */}
           <MotionCard
             {...featureCardStyles}
             _hover={{}}
@@ -380,11 +376,12 @@ const TransferPage = () => {
               <Icon as={Users} mr={3} color={highlightColor} boxSize={6} />
               <Heading size="md">Available Peers</Heading>
             </MotionFlex>
-
+            <Text mb={2} fontSize="sm" opacity={0.8}>
+              Your Name: {sessionName}
+            </Text>
             <PeerList />
 
             <Box mt={4} className="custom-peer-styling">
-              {/* Custom styling to override any sharp lines in PeerList component */}
               <style>{`
                 .custom-peer-styling table,
                 .custom-peer-styling tr,
@@ -441,7 +438,7 @@ const TransferPage = () => {
               transform="translate(30%, 30%)"
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.15 }}
-              transition={{ delay: 0.5, duration: 0.7 }} // Faster: delay 0.7->0.5, duration 1->0.7
+              transition={{ delay: 0.5, duration: 0.7 }}
             />
 
             <MotionFlex
@@ -547,7 +544,7 @@ const TransferPage = () => {
                 .custom-transfer-styling [role="separator"] {
                   border: none !important;
                   height: 1px !important;
-                  background: linear-gradient(to right, transparent, ${statsSeparatorBg}, transparent) !important; // Reused statsSeparatorBg
+                  background: linear-gradient(to right, transparent, ${statsSeparatorBg}, transparent) !important; 
                   margin: 0.5rem 0 !important;
                 }
               `}</style>

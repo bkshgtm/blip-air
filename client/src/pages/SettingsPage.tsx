@@ -40,7 +40,7 @@ const SettingsPage: React.FC = () => {
     setChunkSize,
     toggleCompression,
   } = useSettingsStore()
-  const toast = useToast({ position: "bottom" }) // Changed position to bottom
+  const toast = useToast({ position: "bottom" })
 
   const headingColor = useColorModeValue("gray.800", "whiteAlpha.900")
   const accentGradient = useColorModeValue("linear(to-br, brand.400, brand.600)", "linear(to-br, brand.300, brand.500)")
@@ -115,7 +115,6 @@ const SettingsPage: React.FC = () => {
               </VStack>
             </GlassCard>
 
-            {/* Appearance & Performance Settings */}
             <GlassCard
               p={8}
               position="relative"
@@ -204,10 +203,6 @@ const SettingsPage: React.FC = () => {
                   status: "success",
                   duration: 3000,
                   isClosable: true,
-                  // position: "bottom-right", // Removed explicit position, will use hook default 'top-right'
-                  // containerStyle: { // Removed containerStyle to rely on theme's baseStyle
-                  //   backdropFilter: "blur(16px)",
-                  // },
                 })
               }}
             >

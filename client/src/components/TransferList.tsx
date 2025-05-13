@@ -48,8 +48,8 @@ const TransferList = () => {
       align="stretch"
       bg={bgColor}
       borderRadius="xl"
-      border="none" // Remove this border
-      borderColor={borderColor} // borderColor will no longer have an effect
+      border="none"
+      borderColor={borderColor}
       p={4}
       height="100%"
       minH="300px"
@@ -77,7 +77,7 @@ const TransferList = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.2 }} // Faster: 0.3 -> 0.2
+              transition={{ duration: 0.2 }}
             >
               <VStack p={4} borderRadius="lg" bg={itemBgColor} align="stretch" spacing={3} boxShadow="sm">
                 <HStack justify="space-between">
@@ -142,7 +142,7 @@ const TransferList = () => {
                       </Text>
 
                       <HStack>
-                        {transfer.status === "completed" && transfer.direction === "incoming" && transfer.fileBlob && (
+                        {transfer.status === "completed" && transfer.direction === "incoming" && (
                           <IconButton
                             aria-label="Download file"
                             icon={<Download size={16} />}
@@ -150,7 +150,7 @@ const TransferList = () => {
                             colorScheme="green"
                             _hover={{ filter: "brightness(95%)", transform: "translateY(-1px)" }}
                             transition="all 0.2s ease-out"
-                            onClick={() => {
+                            onClick={async () => {
                               if (transfer.fileBlob) {
                                 const url = URL.createObjectURL(transfer.fileBlob)
                                 const a = document.createElement("a")
@@ -160,6 +160,20 @@ const TransferList = () => {
                                 a.click()
                                 document.body.removeChild(a)
                                 URL.revokeObjectURL(url)
+                              } else if (transfer.usesFileSystemAccessAPI && transfer.fileHandle) {
+                                try {
+                                  const file = await transfer.fileHandle.getFile()
+                                  const url = URL.createObjectURL(file)
+                                  const a = document.createElement("a")
+                                  a.href = url
+                                  a.download = transfer.fileName || "download"
+                                  document.body.appendChild(a)
+                                  a.click()
+                                  document.body.removeChild(a)
+                                  URL.revokeObjectURL(url)
+                                } catch (err) {
+                                  console.error("Error downloading file:", err)
+                                }
                               }
                             }}
                           />

@@ -25,33 +25,31 @@ interface QRCodeModalProps {
 const MotionBox = motion(Box)
 
 const QRCodeModal = ({ isOpen, onClose }: QRCodeModalProps) => {
-  const { sessionName, pin } = useSettingsStore() // PIN is available if needed later
+  const { sessionName, pin } = useSettingsStore()
   const { sessionId } = useSocketStore()
 
   const bgGradient = useColorModeValue("linear(to-br, purple.50, blue.50)", "linear(to-br, gray.800, purple.900)")
 
-  let qrValue = "";
+  let qrValue = ""
   if (typeof window !== "undefined") {
-    const baseUrl = window.location.origin;
-    const params = new URLSearchParams();
+    const baseUrl = window.location.origin
+    const params = new URLSearchParams()
     if (sessionId) {
-      params.append("connectToPeerId", sessionId);
+      params.append("connectToPeerId", sessionId)
     }
     if (sessionName) {
-      params.append("sessionNameLabel", sessionName); // Use a different param name to avoid conflict if 'name' is generic
+      params.append("sessionNameLabel", sessionName)
     }
-    // Not including PIN in QR URL for security. User would be prompted if target session requires it.
-    qrValue = `${baseUrl}/transfer${params.toString() ? `?${params.toString()}` : ""}`;
-  } else {
-    // Fallback or placeholder if window is not defined (e.g., during SSR, though unlikely for this modal)
-    qrValue = "Error: Could not generate QR code URL.";
-  }
 
+    qrValue = `${baseUrl}/transfer${params.toString() ? `?${params.toString()}` : ""}`
+  } else {
+    qrValue = "Error: Could not generate QR code URL."
+  }
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} isCentered>
       <ModalOverlay backdropFilter="blur(10px)" bg="blackAlpha.600" />
-      <ModalContent 
+      <ModalContent
         p={8}
         overflow="hidden"
         borderWidth="1px"
@@ -73,14 +71,16 @@ const QRCodeModal = ({ isOpen, onClose }: QRCodeModalProps) => {
           filter="blur(60px)"
           transform="translate(-50%, 30%)"
         />
-        <ModalHeader textAlign="center" px={0}>Connect with QR Code</ModalHeader>
+        <ModalHeader textAlign="center" px={0}>
+          Connect with QR Code
+        </ModalHeader>
         <ModalCloseButton />
         <ModalBody position="relative" px={0}>
           <VStack spacing={4} align="center" py={4}>
             <MotionBox
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: "tween", duration: 0.3 }} // Faster tween
+              transition={{ type: "tween", duration: 0.3 }}
               p={4}
               bg="white"
               borderRadius="xl"

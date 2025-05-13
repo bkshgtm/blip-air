@@ -3,10 +3,7 @@ import { io, type Socket } from "socket.io-client"
 import { useWebRTCStore } from "./webrtcStore" // Import the WebRTC store
 import { useSettingsStore } from "./settingsStore"
 
-// Define the server URL - in production this would be your deployed backend
 const VITE_SERVER_URL_CONFIG = import.meta.env.VITE_SERVER_URL || "192.168.1.76:3001"
-
-// Remove any existing protocol from the VITE_SERVER_URL_CONFIG
 const VITE_SERVER_URL_BASE = VITE_SERVER_URL_CONFIG.replace(/^(wss?:\/\/)?/, "")
 
 let SERVER_URL: string
@@ -16,8 +13,7 @@ if (typeof window !== "undefined") {
   SERVER_URL = `${protocol}${VITE_SERVER_URL_BASE}`
   console.log(`[SocketStore] Determined SERVER_URL: ${SERVER_URL}`)
 } else {
-  // Fallback for non-browser environments
-  SERVER_URL = `ws://${VITE_SERVER_URL_BASE}` // Default to ws for non-browser
+  SERVER_URL = `ws://${VITE_SERVER_URL_BASE}`
   console.log(`[SocketStore] Fallback SERVER_URL (non-browser): ${SERVER_URL}`)
 }
 
@@ -47,20 +43,20 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     const { sessionName } = useSettingsStore.getState()
     const { socket } = get()
 
-    // If socket already exists, don't create a new one
     if (socket) return
 
-    // Create new socket connection
     const newSocket = io(SERVER_URL, {
       transports: ["websocket"],
       autoConnect: true,
       withCredentials: true,
     })
 
-    // Set up event listeners
     newSocket.on("connect", () => {
       console.log("Connected to signaling server")
       set({ isConnected: true })
+      if (sessionName) {
+        newSocket.emit("set-name", sessionName)
+      }
     })
 
     newSocket.on("disconnect", () => {
@@ -73,16 +69,18 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       set({ sessionId })
     })
 
-    newSocket.on("peers-updated", (peerIds: string[]) => {
-      console.log("Peers updated:", peerIds)
-      const peers = peerIds.map((id) => ({
-        id,
-        name: id === newSocket.id ? sessionName : `Peer ${id.substring(0, 4)}`,
-      }))
-      set({ peers })
+    newSocket.on("peers-updated", (peersData: Array<{ id: string; name: string }>) => {
+      console.log("Peers updated:", peersData)
+      const currentUserId = newSocket.id
+      const updatedPeers = peersData.map((peer) => {
+        if (peer.id === currentUserId) {
+          return { ...peer, name: sessionName }
+        }
+        return peer
+      })
+      set({ peers: updatedPeers })
     })
 
-    // Setup global handlers for WebRTC signaling
     newSocket.on("relay-offer", ({ offer, from }) => {
       console.log(`[SocketStore] Received relay-offer from ${from}`)
       useWebRTCStore.getState().handleRelayOffer(offer, from)
@@ -98,7 +96,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       useWebRTCStore.getState().handleRelayIceCandidate(candidate, from)
     })
 
-    // Store the socket in state
     set({ socket: newSocket })
   },
 

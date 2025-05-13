@@ -62,17 +62,14 @@ const FileDropZone = () => {
         height={selectedFiles.length > 0 ? "auto" : "200px"}
         bg={bgColor}
         borderRadius="xl"
-        border="none" // Dashed border removed as per request
-        // borderColor for animate prop is still here but won't be visible without a border
+        border="none"
         p={4}
-        transition={{ duration: 0.15 }} // Faster: 0.2 -> 0.15
+        transition={{ duration: 0.15 }}
         animate={{
-          // Animate borderColor for potential future use, or if a subtle bg change on drag is desired
-          borderColor: isDragging ? activeBorderColor : borderColor, 
+          borderColor: isDragging ? activeBorderColor : borderColor,
           scale: isDragging ? 1.02 : 1,
         }}
         whileHover={selectedFiles.length === 0 ? { scale: 1.01 } : {}}
-        // Note: display, alignItems, justifyContent, cursor moved to inner Box
       >
         <Box
           {...getRootProps()}
@@ -82,85 +79,87 @@ const FileDropZone = () => {
           alignItems="center"
           justifyContent="center"
           cursor={selectedFiles.length > 0 ? "default" : "pointer"}
-          borderRadius="inherit" // Inherit border radius for click area consistency
+          borderRadius="inherit"
         >
           <input {...getInputProps()} />
 
           {selectedFiles.length === 0 ? (
-            <VStack spacing={2} pointerEvents="none"> {/* Prevent VStack from capturing dropzone events */}
+            <VStack spacing={2} pointerEvents="none">
+              {" "}
+              {/* Prevent VStack from capturing dropzone events */}
               <Icon as={Upload} boxSize={10} color="brand.400" />
               <Text textAlign="center">Drag and drop files here, or click to select files</Text>
             </VStack>
           ) : (
             <VStack width="100%" spacing={4}>
-            <HStack width="100%" justifyContent="space-between">
-              <Text fontWeight="bold">Selected Files ({selectedFiles.length})</Text>
-              <Button size="sm" variant="outline" onClick={clearFiles}>
-                Clear All
+              <HStack width="100%" justifyContent="space-between">
+                <Text fontWeight="bold">Selected Files ({selectedFiles.length})</Text>
+                <Button size="sm" variant="outline" onClick={clearFiles}>
+                  Clear All
+                </Button>
+              </HStack>
+
+              <List spacing={2} width="100%">
+                {selectedFiles.map((file, index) => (
+                  <ListItem
+                    key={index}
+                    p={2}
+                    borderRadius="md"
+                    bg={glass100}
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="space-between"
+                  >
+                    <HStack>
+                      <Icon as={FileIcon} />
+                      <VStack align="start" spacing={0}>
+                        <Text fontSize="sm" fontWeight="medium" noOfLines={1}>
+                          {file.name}
+                        </Text>
+                        <Text fontSize="xs" color="gray.500">
+                          {formatFileSize(file.size)}
+                        </Text>
+                      </VStack>
+                    </HStack>
+                    <IconButton
+                      aria-label="Remove file"
+                      icon={<X size={16} />}
+                      size="sm"
+                      variant="ghost"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        removeFile(index)
+                      }}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+
+              <Button
+                leftIcon={<Upload size={16} />}
+                size="sm"
+                variant="outline"
+                borderColor={useColorModeValue("gray.300", "gray.600")}
+                color={useColorModeValue("gray.700", "gray.200")}
+                _hover={{
+                  bg: useColorModeValue("brand.100", "brand.800"),
+                  borderColor: useColorModeValue("brand.400", "brand.300"),
+                  color: useColorModeValue("brand.600", "brand.200"),
+                }}
+                _active={{
+                  bg: useColorModeValue("brand.200", "brand.700"),
+                }}
+                transition="all 0.2s ease"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  open()
+                }}
+              >
+                Add More Files
               </Button>
-            </HStack>
-
-            <List spacing={2} width="100%">
-              {selectedFiles.map((file, index) => (
-                <ListItem
-                  key={index}
-                  p={2}
-                  borderRadius="md"
-                  bg={glass100}
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="space-between"
-                >
-                  <HStack>
-                    <Icon as={FileIcon} />
-                    <VStack align="start" spacing={0}>
-                      <Text fontSize="sm" fontWeight="medium" noOfLines={1}>
-                        {file.name}
-                      </Text>
-                      <Text fontSize="xs" color="gray.500">
-                        {formatFileSize(file.size)}
-                      </Text>
-                    </VStack>
-                  </HStack>
-                  <IconButton
-                    aria-label="Remove file"
-                    icon={<X size={16} />}
-                    size="sm"
-                    variant="ghost"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      removeFile(index)
-                    }}
-                  />
-                </ListItem>
-              ))}
-            </List>
-
-            <Button
-              leftIcon={<Upload size={16} />}
-              size="sm"
-              variant="outline"
-              borderColor={useColorModeValue("gray.300", "gray.600")}
-              color={useColorModeValue("gray.700", "gray.200")}
-              _hover={{
-                bg: useColorModeValue("brand.100", "brand.800"),
-                borderColor: useColorModeValue("brand.400", "brand.300"),
-                color: useColorModeValue("brand.600", "brand.200")
-              }}
-              _active={{
-                bg: useColorModeValue("brand.200", "brand.700")
-              }}
-              transition="all 0.2s ease"
-              onClick={(e) => {
-                e.stopPropagation()
-                open()
-              }}
-            >
-              Add More Files
-            </Button>
-          </VStack>
-        )}
-        </Box> {/* Close the inner Box component */}
+            </VStack>
+          )}
+        </Box>
       </MotionBox>
     </VStack>
   )

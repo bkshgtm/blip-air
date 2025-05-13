@@ -11,7 +11,6 @@ body {
   overflow-x: hidden;
 }
 
-/* For WebKit browsers (Chrome, Safari) */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

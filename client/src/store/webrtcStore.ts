@@ -1,14 +1,13 @@
 import { create } from "zustand"
-import { NavigateFunction } from "react-router-dom" // Import NavigateFunction
+import { NavigateFunction } from "react-router-dom"
 import { useSocketStore } from "./socketStore"
 import { useSettingsStore } from "./settingsStore"
-// Removed encryption imports
 
 interface PeerConnection {
   connection: RTCPeerConnection
   dataChannel?: RTCDataChannel
   sessionId: string
-  queuedIceCandidates?: RTCIceCandidate[] // Add this line
+  queuedIceCandidates?: RTCIceCandidate[]
 }
 
 interface FileTransfer {
@@ -26,16 +25,16 @@ interface FileTransfer {
     total: number
     received: number
     size: number
-    data?: Uint8Array[] // To store received chunk data on receiver
+    data?: (Uint8Array | null)[]
+    receivedIndices?: Set<number>
   }
-  fileBlob?: Blob // To store the final assembled file on receiver
-  fileHandle?: FileSystemFileHandle // For File System Access API
-  writableStream?: FileSystemWritableFileStream // For File System Access API
-  usesFileSystemAccessAPI?: boolean // Flag to indicate API usage
+  fileBlob?: Blob
+  fileHandle?: FileSystemFileHandle
+  writableStream?: FileSystemWritableFileStream
+  usesFileSystemAccessAPI?: boolean
   startTime?: number
   error?: string
   _notified?: boolean
-  // cryptoKey field removed
 }
 
 interface WebRTCState {
@@ -43,15 +42,10 @@ interface WebRTCState {
   transfers: FileTransfer[]
   selectedFiles: File[]
   pendingFileAcceptances: Map<string, { resolve: (value: unknown) => void; reject: (reason?: any) => void }>
-  pendingChunkAcks: Map<string, { resolve: () => void; reject: (reason?: any) => void; chunkIndex: number }> // Store index too
-  inFlightAckCount: number // Counter for sliding window
-  ackReceivedNotifier: { promise: Promise<void> | null; resolve: (() => void) | null } // Notifier for waiting sender
 
-  // Methods for managing connections
   createPeerConnection: (peerId: string, isAnsweringOffer?: boolean) => Promise<void>
   closePeerConnection: (peerId: string) => void
 
-  // Methods for file transfers
   setSelectedFiles: (files: File[]) => void
   sendFiles: (peerId: string) => Promise<void>
   pauseTransfer: (transferId: string) => void
@@ -60,24 +54,20 @@ interface WebRTCState {
   acceptTransfer: (transferId: string) => void
   rejectTransfer: (transferId: string) => void
 
-  // Helper methods
   updateTransferProgress: (transferId: string, progress: number, speed: number, eta: number) => void
   addTransfer: (transfer: Omit<FileTransfer, "progress" | "speed" | "eta" | "status">) => string
   updateTransferStatus: (transferId: string, status: FileTransfer["status"], error?: string) => void
   clearAllTransfers: () => void
 
-  // Methods for handling relayed signaling messages
   handleRelayOffer: (offer: RTCSessionDescriptionInit, fromPeerId: string) => Promise<void>
   handleRelayAnswer: (answer: RTCSessionDescriptionInit, fromPeerId: string) => Promise<void>
   handleRelayIceCandidate: (candidate: RTCIceCandidateInit, fromPeerId: string) => Promise<void>
-  processQueuedIceCandidates: (peerId: string) => Promise<void> // Add this line
+  processQueuedIceCandidates: (peerId: string) => Promise<void>
 
-  // Navigation utility
   navigate?: NavigateFunction
   setNavigate: (navigate: NavigateFunction) => void
 }
 
-// Default RTCPeerConnection configuration
 const DEFAULT_PC_CONFIG: RTCConfiguration = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
@@ -88,12 +78,12 @@ const DEFAULT_PC_CONFIG: RTCConfiguration = {
       credential: "openrelayproject",
     },
     {
-      urls: "turns:openrelay.metered.ca:443?transport=tcp", // Secure TURN over TCP
+      urls: "turns:openrelay.metered.ca:443?transport=tcp",
       username: "openrelayproject",
       credential: "openrelayproject",
     },
   ],
-  iceTransportPolicy: "all" as RTCIceTransportPolicy, // Allow all candidate types
+  iceTransportPolicy: "all" as RTCIceTransportPolicy,
 }
 
 export const useWebRTCStore = create<WebRTCState>((set, get) => ({
@@ -101,9 +91,6 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
   transfers: [],
   selectedFiles: [],
   pendingFileAcceptances: new Map(),
-  pendingChunkAcks: new Map(),
-  inFlightAckCount: 0, // Initialize counter
-  ackReceivedNotifier: { promise: null, resolve: null }, // Initialize notifier
   navigate: undefined,
   setNavigate: (navigateFn) => set({ navigate: navigateFn }),
 
@@ -123,65 +110,43 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
       existingPeerEntry.connection.connectionState === "connected"
     ) {
       console.log(`[WebRTC] Reusing existing open data channel for peer ${peerId}`)
-      // Ensure event listeners are correctly (re-)attached or handled if needed,
-      // though for a simple reuse, if they were set up on the existing channel, they might still be active.
-      // For this simplified reuse, we assume the existing channel and its listeners are fine.
-
-      // If we are answering an offer, but the connection is already established and channel open,
-      // it might indicate a re-negotiation or a redundant offer.
-      // The current logic outside this block handles offer/answer for new connections.
-      // For a simple reuse, we might not need to do full offer/answer again if channel is open.
-      // However, if `isAnsweringOffer` is true, it implies we received an offer that needs a response.
-      // This part needs careful thought for full robustness.
-      // For now, if channel is open, we assume it's ready.
       if (isAnsweringOffer) {
         console.warn(
           `[WebRTC] createPeerConnection called with isAnsweringOffer=true for an already connected peer ${peerId} with an open data channel. This might be a redundant offer or require re-negotiation not yet fully handled by this simplified reuse logic.`,
         )
-        // Potentially, we might still need to process the offer/answer cycle even on an existing connection
-        // if the offer indicates a change that requires it.
-        // For now, we'll let the offer/answer logic proceed if isAnsweringOffer is true,
-        // but it will operate on the NEW pc object created below if this simplified reuse isn't sufficient.
-        // This is a known area for future refinement.
       } else {
-        // If not answering an offer and channel is open, we can likely just return.
-        // The `sendFiles` will use this existing open channel.
         return
       }
     } else if (existingPeerEntry) {
       console.log(
         `[WebRTC] Existing connection found for peer ${peerId}, but data channel is not open or connection not connected. State: ${existingPeerEntry.connection.connectionState}, DataChannel: ${existingPeerEntry.dataChannel?.readyState}. Proceeding to create new connection setup.`,
       )
-      // Optionally, close the old one before creating a new one to clean up resources
+
       existingPeerEntry.connection.close()
       if (existingPeerEntry.dataChannel) {
         existingPeerEntry.dataChannel.close()
       }
-      get().peerConnections.delete(peerId) // Remove old entry
+      get().peerConnections.delete(peerId)
     }
 
     console.log(`[WebRTC] Creating new RTCPeerConnection for peer ${peerId}`)
     const peerConnection = new RTCPeerConnection(DEFAULT_PC_CONFIG)
 
-    // Store the new peer connection early so it's available for event handlers
-    // This will overwrite the old one if we decided to recreate
     const newPeerEntry: PeerConnection = {
       connection: peerConnection,
       sessionId: peerId,
-      // dataChannel will be added after creation
     }
     get().peerConnections.set(peerId, newPeerEntry)
     set({ peerConnections: new Map(get().peerConnections) })
 
     peerConnection.oniceconnectionstatechange = async () => {
       console.log(`[WebRTC] ICE connection state changed for peer ${peerId}: ${peerConnection.iceConnectionState}`)
-      // Log stats when connection state might be final or problematic
+
       if (["connected", "completed", "failed", "disconnected"].includes(peerConnection.iceConnectionState)) {
         try {
           const stats = await peerConnection.getStats()
           let foundSelectedPair = false
           stats.forEach((report) => {
-            // Standard-based check for the active candidate pair
             if (report.type === "candidate-pair" && report.nominated && report.state === "succeeded") {
               const local = stats.get(report.localCandidateId)
               const remote = stats.get(report.remoteCandidateId)
@@ -193,7 +158,6 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
             }
           })
           if (!foundSelectedPair) {
-            // Fallback for more general transport info if specific pair not found or for overall transport state
             stats.forEach((report) => {
               if (report.type === "transport" && report.selectedCandidatePairId) {
                 const selectedPair = stats.get(report.selectedCandidatePairId)
@@ -232,18 +196,16 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
       console.log(`[WebRTC] Connection state changed for peer ${peerId}: ${peerConnection.connectionState}`)
     }
 
-    // Create a data channel for file transfer
     const dataChannel = peerConnection.createDataChannel("fileTransfer", {
-      ordered: false, // Avoid head-of-line blocking
-      maxRetransmits: 0, // UDP-style fire-and-forget
+      ordered: false,
+      maxRetransmits: 5,
       negotiated: false,
       id: 0,
       protocol: "file-transfer",
     })
-    dataChannel.bufferedAmountLowThreshold = 65536 * 32 // 64KB chunks * 32 window
-    dataChannel.binaryType = "arraybuffer" // Set binary type for outgoing channel
+    dataChannel.bufferedAmountLowThreshold = 65536 * 32
+    dataChannel.binaryType = "arraybuffer"
 
-    // Set up data channel event handlers
     dataChannel.onopen = () => {
       console.log(`[WebRTC] Data channel opened with peer ${peerId}`)
     }
@@ -252,22 +214,18 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
       console.log(`[WebRTC] Data channel closed with peer ${peerId}`)
     }
 
-    // Receiver state for pending binary chunk metadata
     let pendingChunkMetadata: { fileId: string; chunkIndex: number; totalChunks: number } | null = null
 
     dataChannel.onmessage = async (event) => {
-      // Differentiate between string (JSON metadata) and ArrayBuffer (chunk data)
       if (typeof event.data === "string") {
         console.log(`[WebRTC] Received string message from ${peerId}`)
         try {
           const message = JSON.parse(event.data)
 
           if (message.type === "file-offer") {
-            // Handle file offer
             const { fileId, fileName, fileSize, fileType } = message.data
 
             get().addTransfer({
-              // This will update 'transfers' array
               fileId,
               fileName,
               fileSize,
@@ -281,14 +239,11 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
               },
             })
 
-            // Navigate to transfer page if navigate function is set and not already there
             const navigate = get().navigate
             if (navigate && window.location.pathname !== "/transfer") {
               navigate("/transfer")
             }
-            // The scroll logic in TransferPage.tsx will handle scrolling to bottom
 
-            // Send acknowledgment
             dataChannel.send(
               JSON.stringify({
                 type: "file-offer-ack",
@@ -296,16 +251,15 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
               }),
             )
           } else if (message.type === "file-accepted") {
-            // Handle file acceptance from receiver
             const { fileId: acceptedFileId } = message.data
             const acceptance = get().pendingFileAcceptances.get(acceptedFileId)
             if (acceptance) {
               console.log(`[WebRTC] Received file-accepted for ${acceptedFileId}`)
               acceptance.resolve(true)
               get().pendingFileAcceptances.delete(acceptedFileId)
-              // Update transfer status to transferring on sender side as well
+
               get().updateTransferStatus(acceptedFileId, "transferring")
-              // Set start time for speed calculation
+
               const transfers = get().transfers
               const transferIndex = transfers.findIndex((t) => t.fileId === acceptedFileId)
               if (transferIndex !== -1) {
@@ -315,7 +269,6 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
               }
             }
           } else if (message.type === "file-rejected") {
-            // Handle file rejection from receiver
             const { fileId: rejectedFileId } = message.data
             const acceptance = get().pendingFileAcceptances.get(rejectedFileId)
             if (acceptance) {
@@ -325,54 +278,92 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
               get().updateTransferStatus(rejectedFileId, "error", "Rejected by peer")
             }
           } else if (message.type === "file-complete-notify") {
-            // Handle completion notification from sender
             const { fileId } = message.data
             const transfer = get().transfers.find((t) => t.fileId === fileId)
             if (transfer && transfer.status !== "completed") {
-              get().updateTransferStatus(fileId, "completed")
-              // Send confirmation back to sender
-              dataChannel.send(
-                JSON.stringify({
-                  type: "file-complete-confirm",
-                  data: { fileId },
-                }),
-              )
+              const verifyComplete = async () => {
+                const currentTransfer = get().transfers.find((t) => t.fileId === fileId)
+                if (!currentTransfer) return false
+
+                const allChunksAccountedFor = currentTransfer.chunks.receivedIndices
+                  ? currentTransfer.chunks.receivedIndices.size === currentTransfer.chunks.total
+                  : currentTransfer.chunks.received === currentTransfer.chunks.total
+
+                if (allChunksAccountedFor) {
+                  if (currentTransfer.usesFileSystemAccessAPI && currentTransfer.writableStream) {
+                    try {
+                      await currentTransfer.writableStream.close()
+                      currentTransfer.writableStream = undefined
+                      console.log(`[WebRTC] File ${currentTransfer.fileName} fully written to disk`)
+                    } catch (err) {
+                      console.error(`[WebRTC] Error finalizing file:`, err)
+                      return false
+                    }
+                  }
+                  return true
+                }
+                return false
+              }
+
+              const isComplete = await verifyComplete()
+              if (isComplete) {
+                get().updateTransferStatus(fileId, "completed")
+
+                dataChannel.send(
+                  JSON.stringify({
+                    type: "file-complete-confirm",
+                    data: { fileId },
+                  }),
+                )
+              } else {
+                console.warn(
+                  `[WebRTC] Received complete-notify for ${fileId} but verification failed. Expected: ${
+                    transfer.chunks.total
+                  }, Received (via indices): ${transfer.chunks.receivedIndices?.size || "N/A"}, Received (via count): ${
+                    transfer.chunks.received
+                  }`,
+                )
+
+                const missingChunks: number[] = []
+                if (transfer.chunks.receivedIndices) {
+                  for (let i = 0; i < transfer.chunks.total; i++) {
+                    if (!transfer.chunks.receivedIndices.has(i)) {
+                      missingChunks.push(i)
+                    }
+                  }
+                } else {
+                  console.warn(
+                    `[WebRTC] Missing chunk calculation fallback for ${fileId} as receivedIndices is not available.`,
+                  )
+                  for (let i = transfer.chunks.received; i < transfer.chunks.total; i++) {
+                    missingChunks.push(i)
+                  }
+                }
+
+                if (missingChunks.length > 0) {
+                  dataChannel.send(
+                    JSON.stringify({
+                      type: "chunk-resend-request",
+                      data: {
+                        fileId,
+                        missingChunks,
+                      },
+                    }),
+                  )
+                } else {
+                  console.error(
+                    `[WebRTC] Verification failed for ${fileId}, but no missing chunks identified. This might be an issue.`,
+                  )
+                }
+              }
             }
-            // Removed empty file-chunk handler since we use file-chunk-meta
           } else if (message.type === "file-chunk-meta") {
-            // New message type for chunk metadata
             console.log(`[WebRTC] Received chunk-meta from ${peerId}:`, message.data)
             pendingChunkMetadata = message.data
           } else if (message.type === "file-complete-confirm") {
-            // Handle completion confirmation from receiver
-            const { fileId: confirmedFileId } = message.data // Renamed to avoid conflict
+            const { fileId: confirmedFileId } = message.data
             get().updateTransferStatus(confirmedFileId, "completed")
-          } else if (message.type === "chunk-ack") {
-            // Handle chunk acknowledgment from receiver
-            const { fileId, chunkIndex } = message.data
-            const ackKey = `${fileId}-${chunkIndex}`
-            const ack = get().pendingChunkAcks.get(ackKey)
-            if (ack) {
-              console.log(`[WebRTC] Received chunk-ack for ${ackKey} (Index: ${ack.chunkIndex})`)
-              ack.resolve() // Resolve the specific promise for this chunk
-              get().pendingChunkAcks.delete(ackKey)
-
-              // Decrement in-flight count
-              set((state) => ({ inFlightAckCount: Math.max(0, state.inFlightAckCount - 1) }))
-              console.log(`[WebRTC] In-flight count decremented: ${get().inFlightAckCount}`)
-
-              // Notify the sender loop if it was waiting
-              const notifier = get().ackReceivedNotifier
-              if (notifier.resolve) {
-                console.log("[WebRTC] Notifying waiting sender loop.")
-                notifier.resolve()
-                set({ ackReceivedNotifier: { promise: null, resolve: null } }) // Reset notifier
-              }
-            } else {
-              console.warn(`[WebRTC] Received unexpected or duplicate chunk-ack for ${ackKey}`)
-            }
           } else if (message.type === "transfer-control") {
-            // Handle transfer control messages (pause, resume, cancel)
             const { fileId, action } = message.data
 
             if (action === "pause") {
@@ -382,6 +373,48 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
             } else if (action === "cancel") {
               get().updateTransferStatus(fileId, "error", "Transfer cancelled by peer")
             }
+          } else if (message.type === "chunk-resend-request") {
+            const { fileId, missingChunks } = message.data
+            const transfer = get().transfers.find((t) => t.fileId === fileId)
+            if (!transfer || transfer.direction !== "outgoing") {
+              console.warn(`[WebRTC] Invalid chunk resend request for ${fileId}`)
+              return
+            }
+
+            console.log(`[WebRTC] Resending chunks ${missingChunks.join(",")} for ${fileId}`)
+            const file = get().selectedFiles.find((f) => f.name === transfer.fileName)
+            if (!file) {
+              console.error(`[WebRTC] Original file not found for resend: ${transfer.fileName}`)
+              return
+            }
+
+            const { chunkSize } = useSettingsStore.getState()
+            const reader = new FileReader()
+
+            missingChunks.forEach(async (chunkIndex: number) => {
+              const start = chunkIndex * chunkSize
+              const end = Math.min(start + chunkSize, file.size)
+              const chunk = file.slice(start, end)
+
+              const chunkArrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+                reader.onload = (e) => resolve(e.target?.result as ArrayBuffer)
+                reader.onerror = reject
+                reader.readAsArrayBuffer(chunk)
+              })
+
+              dataChannel.send(
+                JSON.stringify({
+                  type: "file-chunk-meta",
+                  data: {
+                    fileId,
+                    chunkIndex,
+                    totalChunks: transfer.chunks.total,
+                  },
+                }),
+              )
+
+              dataChannel.send(chunkArrayBuffer)
+            })
           }
         } catch (error) {
           console.error("[WebRTC] Error processing string message:", error, event.data)
@@ -394,7 +427,7 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
         }
 
         const { fileId, chunkIndex, totalChunks } = pendingChunkMetadata
-        pendingChunkMetadata = null // Clear after use
+        pendingChunkMetadata = null
 
         const plainChunk = new Uint8Array(event.data)
 
@@ -403,38 +436,42 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
 
         if (transferIndex === -1) {
           console.warn(`[WebRTC] Received chunk for unknown transfer (after metadata): ${fileId}`)
-          // Acknowledge with original metadata to keep sender in sync if possible
+
           dataChannel.send(JSON.stringify({ type: "chunk-ack", data: { fileId, chunkIndex } }))
           return
         }
 
-        // Process the chunk (logic moved from old "file-chunk" JSON message type)
         console.log(`[WebRTC] Received chunk ${chunkIndex + 1}/${totalChunks} for file ${fileId} from peer ${peerId}`)
-
-        // const transfers = get().transfers; // Already declared above in the scope of onmessage
-        // Ensure we are modifying the correct incoming transfer
-        // const transferIndex = transfers.findIndex((t) => t.fileId === fileId && t.direction === "incoming"); // Already declared above
 
         if (transferIndex !== -1) {
           const transfer = { ...transfers[transferIndex] }
 
-          // If transfer is already marked as error (e.g. cancelled), ignore further chunks for it
+          if (transfer.chunks.total !== totalChunks) {
+            console.warn(
+              `[WebRTC] Discrepancy detected in total chunks for ${fileId}. Receiver calculated: ${transfer.chunks.total}, Sender sent: ${totalChunks}. Updating receiver count.`,
+            )
+            transfer.chunks.total = totalChunks
+          }
+
           if (transfer.status === "error") {
             console.log(`[WebRTC] Ignoring chunk for already errored/cancelled transfer ${fileId}`)
-            // Acknowledge the chunk to prevent sender from potentially resending or stalling,
-            // but don't process it further.
+
             dataChannel.send(JSON.stringify({ type: "chunk-ack", data: { fileId, chunkIndex } }))
             return
           }
 
-          // Initialize chunks.data if not using File System Access API and it doesn't exist
-          if (!transfer.usesFileSystemAccessAPI && !transfer.chunks.data) {
-            transfer.chunks.data = []
+          if (!transfer.usesFileSystemAccessAPI) {
+            if (!transfer.chunks.data) {
+              transfer.chunks.data = new Array(totalChunks).fill(null)
+            }
+            if (!transfer.chunks.receivedIndices) {
+              transfer.chunks.receivedIndices = new Set()
+            }
           }
 
           if (transfer.usesFileSystemAccessAPI && transfer.writableStream) {
             try {
-              await transfer.writableStream.write(plainChunk) // Use plainChunk
+              await transfer.writableStream.write(plainChunk)
               console.log(
                 `[WebRTC] Chunk ${chunkIndex + 1} written to disk via File System Access API for ${transfer.fileName}`,
               )
@@ -442,58 +479,59 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
               console.error(`[WebRTC] Error writing chunk to disk for ${transfer.fileName}:`, err.message)
               transfer.status = "error"
               transfer.error = "Disk write error"
-              // Close the stream on error
+
               if (transfer.writableStream) {
                 try {
                   await transfer.writableStream.close()
-                } catch (closeErr) {
-                  /* ignore */
-                }
+                } catch (closeErr) {}
               }
-              transfer.writableStream = undefined // Clear the stream
+              transfer.writableStream = undefined
             }
-          } else {
-            // Fallback: Store the plain chunk in memory
-            if (transfer.chunks.data) {
-              transfer.chunks.data[chunkIndex] = plainChunk // Use plainChunk
-            } else if (!transfer.usesFileSystemAccessAPI) {
-              console.error("[WebRTC] Fallback to Blob: chunks.data not initialized!")
-              transfer.chunks.data = [plainChunk] // Use plainChunk
-            }
+          } else if (transfer.chunks.data && transfer.chunks.receivedIndices) {
+            transfer.chunks.data[chunkIndex] = plainChunk
+            transfer.chunks.receivedIndices.add(chunkIndex)
+          } else if (!transfer.usesFileSystemAccessAPI) {
+            console.error("[WebRTC] Fallback to Blob: chunks.data or receivedIndices not initialized!")
+
+            if (!transfer.chunks.data) transfer.chunks.data = new Array(totalChunks).fill(null)
+            if (!transfer.chunks.receivedIndices) transfer.chunks.receivedIndices = new Set()
+            transfer.chunks.data[chunkIndex] = plainChunk
+            transfer.chunks.receivedIndices.add(chunkIndex)
           }
-          transfer.chunks.received = chunkIndex + 1
+
+          if (transfer.chunks.receivedIndices) {
+            transfer.chunks.received = transfer.chunks.receivedIndices.size
+          } else {
+            transfer.chunks.received = (transfer.chunks.received || 0) + 1
+          }
 
           const newProgress = transfer.chunks.received / transfer.chunks.total
 
-          // Calculate speed and ETA
           const now = Date.now()
           const elapsedTime = transfer.startTime ? (now - transfer.startTime) / 1000 : 0
           const speed = elapsedTime > 0 ? (transfer.fileSize * newProgress) / elapsedTime : 0
           const remainingBytes = transfer.fileSize * (1 - newProgress)
           const eta = speed > 0 ? remainingBytes / speed : 0
 
-          // Directly update the local transfer copy
           transfer.progress = newProgress
           transfer.speed = speed
           transfer.eta = eta
 
-          let finalStatus = transfer.status // Keep current status unless changed
+          let finalStatus = transfer.status
 
-          // If all chunks received, finalize and mark as completed
           if (transfer.chunks.received === transfer.chunks.total && transfer.status !== "error") {
             if (transfer.usesFileSystemAccessAPI && transfer.writableStream) {
               try {
                 await transfer.writableStream.close()
                 console.log(`[WebRTC] File ${transfer.fileName} (${fileId}) fully written to disk and stream closed.`)
                 finalStatus = "completed"
-                transfer.writableStream = undefined // Clear the stream
+                transfer.writableStream = undefined
               } catch (err: any) {
                 console.error(`[WebRTC] Error closing writable stream for ${transfer.fileName}:`, err.message)
                 transfer.error = "Error finalizing file on disk"
                 finalStatus = "error"
               }
             } else if (!transfer.usesFileSystemAccessAPI) {
-              // Fallback to Blob
               if (
                 transfer.chunks.data &&
                 transfer.chunks.data.length === transfer.chunks.total &&
@@ -501,33 +539,53 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
               ) {
                 const fileBlob = new Blob(transfer.chunks.data, { type: transfer.fileType })
                 transfer.fileBlob = fileBlob
-                // Optionally clear chunks.data to free memory
-                // delete transfer.chunks.data;
-                console.log(`[WebRTC] File ${transfer.fileName} (${fileId}) fully received and assembled into a Blob.`)
-                finalStatus = "completed"
+                console.log(
+                  `[WebRTC] File ${transfer.fileName} (${fileId}) assembled. Blob size: ${fileBlob.size}, Expected size: ${transfer.fileSize}`,
+                )
+                if (fileBlob.size !== transfer.fileSize) {
+                  console.error(
+                    `[WebRTC] Assembled Blob size mismatch for ${fileId}! Blob: ${fileBlob.size}, Expected: ${transfer.fileSize}`,
+                  )
+                  finalStatus = "error"
+                  transfer.error = "Assembled file size mismatch"
+                } else {
+                  console.log(
+                    `[WebRTC] File ${transfer.fileName} (${fileId}) fully received and assembled into a Blob. Sizes match.`,
+                  )
+                  finalStatus = "completed"
+                }
               } else {
                 console.error(
-                  `[WebRTC] Blob Fallback: All chunks received for ${transfer.fileName} (${fileId}), but chunk data is incomplete or invalid.`,
+                  `[WebRTC] Blob Fallback: All chunks reported received for ${transfer.fileName} (${fileId}), but chunk data array is incomplete or contains invalid entries. Received: ${transfer.chunks.receivedIndices?.size}/${transfer.chunks.total}`,
                 )
-                transfer.error = "Chunk data missing/invalid for Blob"
+                transfer.error = "Chunk data array malformed for Blob assembly"
                 finalStatus = "error"
               }
             }
           }
 
-          // Update the specific transfer in the transfers array
           const updatedTransfersArray = get().transfers.map((t, idx) => (idx === transferIndex ? transfer : t))
           set({ transfers: updatedTransfersArray })
 
-          // Update status separately if it changed (e.g., to completed or error)
           if (finalStatus !== transfer.status) {
             get().updateTransferStatus(fileId, finalStatus, transfer.error)
+
+            if (finalStatus === "completed") {
+              console.log(
+                `[WebRTC] Receiver: File ${fileId} now complete after chunk processing. Sending file-complete-confirm.`,
+              )
+              dataChannel.send(
+                JSON.stringify({
+                  type: "file-complete-confirm",
+                  data: { fileId },
+                }),
+              )
+            }
           }
         } else {
           console.warn(`[WebRTC] Received chunk for unknown or non-incoming transfer ${fileId}`)
         }
 
-        // Send acknowledgment (moved inside the ArrayBuffer processing block)
         dataChannel.send(
           JSON.stringify({
             type: "chunk-ack",
@@ -537,28 +595,25 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
       } else {
         console.warn("[WebRTC] Received unknown message type on data channel:", event.data)
       }
-    } // End of onmessage handler
+    }
 
-    // Set up ICE candidate event
     peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
         console.log(`[WebRTC] Generated ICE candidate for peer ${peerId}:`, event.candidate)
-        // Send the ICE candidate to the peer via signaling server
+
         socket.emit("relay-ice-candidate", {
           candidate: event.candidate,
-          peerId, // Target peer for this candidate
+          peerId,
         })
       }
     }
 
-    // Handle incoming data channels (primarily for the peer being connected to)
     peerConnection.ondatachannel = (event) => {
       console.log(`[WebRTC] Incoming data channel event from peer ${peerId}`)
       const incomingDataChannel = event.channel
-      incomingDataChannel.binaryType = "arraybuffer" // Set binary type for incoming channel
+      incomingDataChannel.binaryType = "arraybuffer"
       console.log(`[WebRTC] Incoming data channel "${incomingDataChannel.label}" received.`)
 
-      // Set up the same event handlers as the primary dataChannel
       incomingDataChannel.onopen = () => {
         console.log(`[WebRTC] Incoming data channel with ${peerId} opened.`)
       }
@@ -569,15 +624,12 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
 
       incomingDataChannel.onmessage = async (ev) => {
         console.log(`[WebRTC] Message on incoming data channel from ${peerId}`)
-        // Forward to the main onmessage handler or handle directly
-        // This re-uses the existing onmessage logic defined for the outgoing dataChannel
-        // Ensure 'dataChannel.onmessage' is robust enough or differentiate if needed
+
         if (dataChannel.onmessage) {
           dataChannel.onmessage(ev)
         }
       }
 
-      // Update the peer connection with the incoming data channel
       const connections = get().peerConnections
       const connection = connections.get(peerId)
 
@@ -588,18 +640,14 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
       }
     }
 
-    // Update the peer entry with the created dataChannel
     const currentEntry = get().peerConnections.get(peerId)
     if (currentEntry && currentEntry.connection === peerConnection) {
-      // Ensure we're updating the correct entry
       currentEntry.dataChannel = dataChannel
       get().peerConnections.set(peerId, currentEntry)
       set({ peerConnections: new Map(get().peerConnections) })
     } else {
-      // This case should ideally not happen if logic is correct,
-      // means the peerConnection object in the map was changed by something else.
       console.error(`[WebRTC] Mismatch or missing peer entry when trying to set dataChannel for ${peerId}`)
-      // Fallback: create a new entry if it was somehow deleted or is a different PC object
+
       get().peerConnections.set(peerId, {
         connection: peerConnection,
         dataChannel,
@@ -608,10 +656,6 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
       set({ peerConnections: new Map(get().peerConnections) })
     }
 
-    // Signaling listeners are handled globally in socketStore.ts
-
-    // Create and send an offer if this is the initiating side AND we are not just answering an offer
-    // Check if we are not already in a connection process (e.g. received an offer)
     if (!isAnsweringOffer && peerConnection.signalingState === "stable") {
       console.log(`[WebRTC] Creating offer for peer ${peerId} as initiator.`)
       const offer = await peerConnection.createOffer()
@@ -636,7 +680,6 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
       connection.connection.close()
       connections.delete(peerId)
 
-      // Force update the state with a new Map instance
       set({ peerConnections: new Map(connections) })
     }
   },
@@ -670,9 +713,8 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
       console.error(
         `[WebRTC] Data channel for ${peerId} is not open. State: ${connection.dataChannel.readyState}. Attempting to wait...`,
       )
-      // Wait for a short period to see if it opens
+
       for (let i = 0; i < 10; i++) {
-        // Wait up to 5 seconds
         if (connection.dataChannel.readyState === "open") {
           console.log(`[WebRTC] Data channel for ${peerId} opened after waiting.`)
           break
@@ -693,229 +735,243 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
     const { dataChannel } = connection
     const { chunkSize, useCompression } = useSettingsStore.getState()
 
-    // Process each selected file
     for (const file of selectedFiles) {
       const fileId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-      set({ inFlightAckCount: 0 }) // Reset counter for each new file
 
-      // Key generation and export removed
+      let currentFileIdForCatch = fileId
 
-      get().addTransfer({
-        fileId,
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type,
-        direction: "outgoing",
-        peerId,
-        chunks: {
-          total: Math.ceil(file.size / chunkSize),
-          received: 0,
-          size: chunkSize,
-        },
-      })
-
-      console.log(`[WebRTC] Sending file offer for ${file.name} to ${peerId}`)
-      dataChannel.send(
-        JSON.stringify({
-          type: "file-offer",
-          data: {
-            // rawKeyBytes removed from payload
-            fileId,
-            fileName: file.name,
-            fileSize: file.size,
-            fileType: file.type,
-            useCompression,
-          },
-        }),
-      )
-
-      // Wait for the receiver to accept the file offer
-      console.log(`[WebRTC] Waiting for acceptance of file ${file.name} (${fileId}) from ${peerId}`)
       try {
-        await new Promise((resolve, reject) => {
-          get().pendingFileAcceptances.set(fileId, { resolve, reject })
-          // Set a timeout for acceptance
-          setTimeout(() => {
-            if (get().pendingFileAcceptances.has(fileId)) {
-              get().pendingFileAcceptances.delete(fileId)
-              reject(new Error("File offer acceptance timeout"))
-              get().updateTransferStatus(fileId, "error", "Acceptance timeout")
-            }
-          }, 30000) // 30-second timeout for acceptance
-        })
-        console.log(`[WebRTC] File offer for ${file.name} (${fileId}) accepted by ${peerId}. Starting transfer.`)
-      } catch (error: any) {
-        console.error(`[WebRTC] File offer for ${file.name} (${fileId}) was not accepted or timed out:`, error.message)
-        get().updateTransferStatus(fileId, "error", error.message || "Offer not accepted")
-        continue // Move to the next file if this one wasn't accepted
-      }
+        currentFileIdForCatch = fileId
 
-      // If accepted, status is already set to 'transferring' by the 'file-accepted' handler
-      // and startTime is also set.
-
-      // Read and send file in chunks
-      const totalChunks = Math.ceil(file.size / chunkSize)
-      const reader = new FileReader()
-      console.log(`[WebRTC] Starting to send ${totalChunks} chunks for file ${file.name} to ${peerId}`)
-
-      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-        // --- Flow Control: Wait if buffer is full ---
-        while (dataChannel.bufferedAmount > dataChannel.bufferedAmountLowThreshold) {
-          console.log(
-            `[WebRTC] Buffered amount ${dataChannel.bufferedAmount} exceeds threshold ${dataChannel.bufferedAmountLowThreshold}. Waiting...`,
-          )
-          await new Promise((resolve) => {
-            dataChannel.onbufferedamountlow = resolve
-          })
-        }
-        // --- End Flow Control ---
-
-        const currentTransfers = get().transfers
-        const currentTransfer = currentTransfers.find((t) => t.fileId === fileId)
-
-        if (!currentTransfer || currentTransfer.status === "error") {
-          console.log(`[WebRTC] Transfer ${fileId} cancelled or errored. Stopping chunk sending.`)
-          break
-        }
-
-        if (currentTransfer.status === "paused") {
-          console.log(`[WebRTC] Transfer ${fileId} is paused. Waiting for resume.`)
-          await new Promise<void>((resolveLoop) => {
-            // Renamed resolve to avoid conflict
-            const checkStatus = () => {
-              const updatedTransfer = get().transfers.find((t) => t.fileId === fileId)
-              if (updatedTransfer && updatedTransfer.status === "transferring") {
-                console.log(`[WebRTC] Transfer ${fileId} resumed.`)
-                resolveLoop()
-              } else if (updatedTransfer && updatedTransfer.status === "error") {
-                console.log(`[WebRTC] Transfer ${fileId} errored while paused.`)
-                resolveLoop() // Exit loop
-              } else {
-                setTimeout(checkStatus, 500)
-              }
-            }
-            checkStatus()
-          })
-          // Re-check status after pause
-          const afterPauseTransfer = get().transfers.find((t) => t.fileId === fileId)
-          if (!afterPauseTransfer || afterPauseTransfer.status === "error") {
-            console.log(`[WebRTC] Transfer ${fileId} errored after pause. Stopping chunk sending.`)
-            break
-          }
-        }
-
-        console.log(`[WebRTC] Preparing chunk ${chunkIndex + 1}/${totalChunks} for ${file.name}`)
-        // Read the chunk
-        const start = chunkIndex * chunkSize
-        const end = Math.min(start + chunkSize, file.size)
-        const chunk = file.slice(start, end)
-
-        // Convert chunk to ArrayBuffer
-        const chunkArrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-          reader.onload = (e) => resolve(e.target?.result as ArrayBuffer)
-          reader.onerror = reject
-          reader.readAsArrayBuffer(chunk)
+        get().addTransfer({
+          fileId,
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          direction: "outgoing",
+          peerId,
+          chunks: {
+            total: Math.ceil(file.size / chunkSize),
+            received: 0,
+            size: chunkSize,
+          },
         })
 
-        // Send chunk metadata as JSON
+        console.log(`[WebRTC] Sending file offer for ${file.name} to ${peerId}`)
         dataChannel.send(
           JSON.stringify({
-            type: "file-chunk-meta",
+            type: "file-offer",
             data: {
               fileId,
-              chunkIndex,
-              totalChunks,
+              fileName: file.name,
+              fileSize: file.size,
+              fileType: file.type,
+              useCompression,
             },
           }),
         )
 
-        // Send actual chunk data as ArrayBuffer
-        console.log(`[WebRTC] Sending ArrayBuffer chunk ${chunkIndex + 1}/${totalChunks} for ${file.name} to ${peerId}`)
-        dataChannel.send(chunkArrayBuffer)
+        console.log(`[WebRTC] Waiting for acceptance of file ${file.name} (${fileId}) from ${peerId}`)
+        try {
+          await new Promise((resolve, reject) => {
+            get().pendingFileAcceptances.set(fileId, { resolve, reject })
 
-        // Update progress
-        const progress = (chunkIndex + 1) / totalChunks
-
-        // Calculate speed and ETA
-        const now = Date.now()
-        const transfer = get().transfers.find((t) => t.fileId === fileId)
-        const elapsedTime = transfer?.startTime ? (now - transfer.startTime) / 1000 : 0
-        const speed = elapsedTime > 0 ? (file.size * progress) / elapsedTime : 0
-        const remainingBytes = file.size * (1 - progress)
-        const eta = speed > 0 ? remainingBytes / speed : 0
-
-        get().updateTransferProgress(fileId, progress, speed, eta)
-
-        console.log(`[WebRTC] Chunk ${chunkIndex + 1} sent. Buffered amount: ${dataChannel.bufferedAmount}`)
-
-        // Store ACK promise for reliability
-        const ackKey = `${fileId}-${chunkIndex}`
-        new Promise<void>((resolve, reject) => {
-          const timeoutId = setTimeout(() => {
-            if (get().pendingChunkAcks.has(ackKey)) {
-              console.error(`[WebRTC] Timeout waiting for chunk-ack for ${ackKey}`)
-              get().pendingChunkAcks.delete(ackKey)
-              // Decrement count even on timeout to prevent deadlock
-              set((state) => ({ inFlightAckCount: Math.max(0, state.inFlightAckCount - 1) }))
-              console.log(`[WebRTC] In-flight count decremented on TIMEOUT: ${get().inFlightAckCount}`)
-              // Notify waiter if necessary
-              const notifier = get().ackReceivedNotifier
-              if (notifier.resolve) {
-                notifier.resolve()
-                set({ ackReceivedNotifier: { promise: null, resolve: null } })
+            setTimeout(() => {
+              if (get().pendingFileAcceptances.has(fileId)) {
+                get().pendingFileAcceptances.delete(fileId)
+                reject(new Error("File offer acceptance timeout"))
+                get().updateTransferStatus(fileId, "error", "Acceptance timeout")
               }
-              reject(new Error(`Timeout waiting for chunk acknowledgment ${chunkIndex + 1}`))
-            }
-          }, 15000) // 15-second timeout per chunk ACK
-
-          get().pendingChunkAcks.set(ackKey, {
-            resolve: () => {
-              clearTimeout(timeoutId)
-              resolve()
-            },
-            reject: (reason) => {
-              clearTimeout(timeoutId)
-              reject(reason)
-            },
-            chunkIndex, // Store index for logging
+            }, 30000)
           })
-        }).catch((error) => {
-          // Handle ACK promise rejection (e.g., timeout)
+          console.log(`[WebRTC] File offer for ${file.name} (${fileId}) accepted by ${peerId}. Starting transfer.`)
+        } catch (error: any) {
           console.error(
-            `[WebRTC] ACK Promise failed for ${file.name} (${fileId}), chunk ${chunkIndex + 1}:`,
+            `[WebRTC] File offer for ${file.name} (${fileId}) was not accepted or timed out:`,
             error.message,
           )
-          // Update status only if not already errored by another means
-          if (get().transfers.find((t) => t.fileId === fileId)?.status !== "error") {
-            get().updateTransferStatus(fileId, "error", error.message || "Chunk ACK error/timeout")
+          get().updateTransferStatus(fileId, "error", error.message || "Offer not accepted")
+          continue
+        }
+
+        const totalChunks = Math.ceil(file.size / chunkSize)
+        const reader = new FileReader()
+        console.log(`[WebRTC] Starting to send ${totalChunks} chunks for file ${file.name} to ${peerId}`)
+
+        for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+          while (dataChannel.bufferedAmount > dataChannel.bufferedAmountLowThreshold) {
+            console.log(
+              `[WebRTC] Buffered amount ${dataChannel.bufferedAmount} exceeds threshold ${dataChannel.bufferedAmountLowThreshold}. Waiting...`,
+            )
+            await new Promise((resolve) => {
+              dataChannel.onbufferedamountlow = resolve
+            })
           }
-          // Note: The main loop might continue if the error doesn't break it,
-          // but the transfer status is now 'error', which should stop subsequent chunks.
-        })
 
-        // Removed setTimeout(resolve, 0) yield for potentially faster throughput on LAN
-      } // End of chunk sending loop
+          const currentTransfers = get().transfers
+          const currentTransfer = currentTransfers.find((t) => t.fileId === fileId)
 
-      // Check final status before sending completion notification
-      const finalTransferState = get().transfers.find((t) => t.fileId === fileId)
-      if (finalTransferState && finalTransferState.status !== "error") {
-        // Send completion notification to receiver
-        console.log(`[WebRTC] Sending file-complete-notify for ${fileId} to ${peerId}`)
-        dataChannel.send(
-          JSON.stringify({
-            type: "file-complete-notify",
-            data: { fileId },
-          }),
+          if (!currentTransfer || currentTransfer.status === "error") {
+            console.log(`[WebRTC] Transfer ${fileId} cancelled or errored. Stopping chunk sending.`)
+            break
+          }
+
+          if (currentTransfer.status === "paused") {
+            console.log(`[WebRTC] Transfer ${fileId} is paused. Waiting for resume.`)
+            await new Promise<void>((resolveLoop) => {
+              const checkStatus = () => {
+                const updatedTransfer = get().transfers.find((t) => t.fileId === fileId)
+                if (updatedTransfer && updatedTransfer.status === "transferring") {
+                  console.log(`[WebRTC] Transfer ${fileId} resumed.`)
+                  resolveLoop()
+                } else if (updatedTransfer && updatedTransfer.status === "error") {
+                  console.log(`[WebRTC] Transfer ${fileId} errored while paused.`)
+                  resolveLoop()
+                } else {
+                  setTimeout(checkStatus, 500)
+                }
+              }
+              checkStatus()
+            })
+
+            const afterPauseTransfer = get().transfers.find((t) => t.fileId === fileId)
+            if (!afterPauseTransfer || afterPauseTransfer.status === "error") {
+              console.log(`[WebRTC] Transfer ${fileId} errored after pause. Stopping chunk sending.`)
+              break
+            }
+          }
+
+          console.log(`[WebRTC] Preparing chunk ${chunkIndex + 1}/${totalChunks} for ${file.name}`)
+
+          const start = chunkIndex * chunkSize
+          const end = Math.min(start + chunkSize, file.size)
+          const chunk = file.slice(start, end)
+
+          const chunkArrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+            reader.onload = (e) => resolve(e.target?.result as ArrayBuffer)
+            reader.onerror = reject
+            reader.readAsArrayBuffer(chunk)
+          })
+
+          dataChannel.send(
+            JSON.stringify({
+              type: "file-chunk-meta",
+              data: {
+                fileId,
+                chunkIndex,
+                totalChunks,
+              },
+            }),
+          )
+
+          console.log(
+            `[WebRTC] Sending ArrayBuffer chunk ${chunkIndex + 1}/${totalChunks} for ${file.name} to ${peerId}`,
+          )
+          dataChannel.send(chunkArrayBuffer)
+
+          const progress = (chunkIndex + 1) / totalChunks
+
+          const now = Date.now()
+          const transfer = get().transfers.find((t) => t.fileId === fileId)
+          const elapsedTime = transfer?.startTime ? (now - transfer.startTime) / 1000 : 0
+          const speed = elapsedTime > 0 ? (file.size * progress) / elapsedTime : 0
+          const remainingBytes = file.size * (1 - progress)
+          const eta = speed > 0 ? remainingBytes / speed : 0
+
+          get().updateTransferProgress(fileId, progress, speed, eta)
+
+          console.log(`[WebRTC] Chunk ${chunkIndex + 1} sent. Buffered amount: ${dataChannel.bufferedAmount}`)
+        }
+
+        const finalTransferState = get().transfers.find((t) => t.fileId === fileId)
+        if (finalTransferState && finalTransferState.status !== "error") {
+          await new Promise<void>((resolve) => {
+            const checkBuffer = () => {
+              const currentTransfer = get().transfers.find((t) => t.fileId === fileId)
+
+              if (!currentTransfer || currentTransfer.status === "error") {
+                console.log(`[WebRTC] Transfer ${fileId} errored while waiting for buffer to drain.`)
+                resolve()
+                return
+              }
+
+              if (dataChannel.bufferedAmount <= 0) {
+                console.log(`[WebRTC] Buffer drained for ${fileId}.`)
+                resolve()
+              } else {
+                console.log(
+                  `[WebRTC] Waiting for buffer to drain for ${fileId}. Buffered: ${dataChannel.bufferedAmount}`,
+                )
+
+                const timeoutId = setTimeout(() => {
+                  dataChannel.onbufferedamountlow = null
+                  checkBuffer()
+                }, 100)
+
+                dataChannel.onbufferedamountlow = () => {
+                  console.log(
+                    `[WebRTC] onbufferedamountlow triggered for ${fileId}. Buffered: ${dataChannel.bufferedAmount}`,
+                  )
+                  clearTimeout(timeoutId)
+                  dataChannel.onbufferedamountlow = null
+
+                  checkBuffer()
+                }
+              }
+            }
+            checkBuffer()
+          })
+
+          const verifiedTransfer = get().transfers.find((t) => t.fileId === fileId)
+          if (verifiedTransfer && verifiedTransfer.status !== "error") {
+            console.log(`[WebRTC] All ${verifiedTransfer.chunks.total} chunks sent and buffer drained for ${fileId}.`)
+
+            console.log(`[WebRTC] Sending file-complete-notify for ${fileId} to ${peerId}`)
+            dataChannel.send(
+              JSON.stringify({
+                type: "file-complete-notify",
+                data: { fileId },
+              }),
+            )
+
+            await new Promise<void>((resolve) => {
+              const checkComplete = () => {
+                const updatedTransfer = get().transfers.find((t) => t.fileId === fileId)
+                if (updatedTransfer?.status === "completed") {
+                  resolve()
+                } else if (updatedTransfer?.status === "error") {
+                  resolve()
+                } else {
+                  setTimeout(checkComplete, 500)
+                }
+              }
+              checkComplete()
+            })
+          } else {
+            console.error(
+              `[WebRTC] Failed to verify transfer ${fileId} - sent: ${verifiedTransfer?.chunks.received}/${verifiedTransfer?.chunks.total}, status: ${verifiedTransfer?.status}`,
+            )
+            get().updateTransferStatus(fileId, "error", "Transfer verification failed")
+          }
+        } else {
+          console.log(
+            `[WebRTC] Transfer ${fileId} ended with status ${finalTransferState?.status}. Not sending complete-notify.`,
+          )
+        }
+      } catch (error: any) {
+        console.error(
+          `[WebRTC] Unhandled error processing file ${file.name} (${currentFileIdForCatch}):`,
+          error.message,
+          error,
         )
-        // Note: Sender status is updated to 'completed' when 'file-complete-confirm' is received back
-      } else {
-        console.log(
-          `[WebRTC] Transfer ${fileId} ended with status ${finalTransferState?.status}. Not sending complete-notify.`,
+        get().updateTransferStatus(
+          currentFileIdForCatch,
+          "error",
+          `Critical error during transfer: ${error.message || "Unknown error"}`,
         )
       }
-    } // End of file loop
+    }
 
-    // Clear selected files after sending
     set({ selectedFiles: [] })
   },
 
@@ -933,18 +989,15 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
       console.log(
         `[WebRTC] No existing PC for ${fromPeerId}, creating one to handle offer by calling createPeerConnection with isAnsweringOffer=true.`,
       )
-      await get().createPeerConnection(fromPeerId, true) // Pass true here
+      await get().createPeerConnection(fromPeerId, true)
       pc = get().peerConnections.get(fromPeerId)?.connection
       if (!pc) {
         console.error(`[WebRTC] Failed to create PC for ${fromPeerId} in handleRelayOffer`)
         return
       }
     } else if (pc.signalingState !== "stable" && pc.signalingState !== "have-remote-offer") {
-      // If PC exists but is in a state not ready to receive an offer (e.g., have-local-offer)
-      // This is part of glare handling.
       const mySessionId = useSocketStore.getState().sessionId
       if (mySessionId && mySessionId < fromPeerId) {
-        // My ID is "smaller", I initiated, they should yield.
         console.warn(
           `[WebRTC] Glare in handleRelayOffer: I (${mySessionId}) sent an offer to ${fromPeerId} and they also sent one. My ID is smaller, I expect them to handle my offer. Ignoring their offer.`,
         )
@@ -960,7 +1013,7 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
         `[WebRTC] Setting remote description for offer from ${fromPeerId}. Current signaling state: ${pc.signalingState}`,
       )
       await pc.setRemoteDescription(new RTCSessionDescription(offer))
-      await get().processQueuedIceCandidates(fromPeerId) // Process queued candidates
+      await get().processQueuedIceCandidates(fromPeerId)
 
       console.log(`[WebRTC] Creating answer for ${fromPeerId}. Current signaling state: ${pc.signalingState}`)
       const answer = await pc.createAnswer()
@@ -981,7 +1034,7 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
       try {
         console.log(`[WebRTC] Setting remote description for answer from ${fromPeerId}`)
         await pc.setRemoteDescription(new RTCSessionDescription(answer))
-        await get().processQueuedIceCandidates(fromPeerId) // Process queued candidates
+        await get().processQueuedIceCandidates(fromPeerId)
       } catch (error) {
         console.error(`[WebRTC] Error in handleRelayAnswer for ${fromPeerId}:`, error)
       }
@@ -1002,15 +1055,11 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
 
     const pc = peerConnectionEntry.connection
 
-    // Ensure candidate is not null or just an empty object before creating RTCIceCandidate
     if (!candidate || (typeof candidate === "object" && Object.keys(candidate).length === 0 && !candidate.candidate)) {
       console.log(
         `[WebRTC] Received null or truly empty ICE candidate object from ${fromPeerId}, typically signals end of candidates.`,
       )
-      // Browsers send an empty candidate string "" to signal the end, or null.
-      // RTCIceCandidate constructor can handle candidate: "" or candidate: null.
-      // If the candidate object itself is null/empty, we might not need to do anything or just log.
-      // For safety, we'll proceed if it's a valid-looking candidate structure or an empty string for candidate.
+
       if (candidate && typeof candidate.candidate !== "string") {
         console.log(`[WebRTC] Received malformed ICE candidate from ${fromPeerId}, ignoring:`, candidate)
         return
@@ -1026,8 +1075,6 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
           await pc.addIceCandidate(candidateInstance)
         } else {
           console.log(`[WebRTC] Received end-of-candidates signal from ${fromPeerId}.`)
-          // No need to call addIceCandidate with an empty/null candidate string if the object itself is structured
-          // The browser handles the end-of-candidates signal.
         }
       } catch (error) {
         console.error(`[WebRTC] Error adding ICE candidate from ${fromPeerId}:`, error)
@@ -1057,7 +1104,6 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
         if (candidate) {
           try {
             if (candidate.candidate) {
-              // Ensure there's an actual candidate string
               console.log(`[WebRTC] Adding queued ICE candidate for ${peerId}:`, candidate)
               await pc.addIceCandidate(candidate)
             } else {
@@ -1078,10 +1124,8 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
     if (transferIndex !== -1) {
       const transfer = transfers[transferIndex]
 
-      // Update transfer status
       get().updateTransferStatus(transferId, "paused")
 
-      // Send pause message to peer
       const connection = peerConnections.get(transfer.peerId)
 
       if (connection && connection.dataChannel) {
@@ -1105,10 +1149,8 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
     if (transferIndex !== -1) {
       const transfer = transfers[transferIndex]
 
-      // Update transfer status
       get().updateTransferStatus(transferId, "transferring")
 
-      // Send resume message to peer
       const connection = peerConnections.get(transfer.peerId)
 
       if (connection && connection.dataChannel) {
@@ -1132,10 +1174,8 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
     if (transferIndex !== -1) {
       const transfer = transfers[transferIndex]
 
-      // Update transfer status
       get().updateTransferStatus(transferId, "error", "Transfer cancelled")
 
-      // Send cancel message to peer
       const connection = peerConnections.get(transfer.peerId)
 
       if (connection && connection.dataChannel) {
@@ -1153,8 +1193,7 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
   },
 
   acceptTransfer: async (transferId: string) => {
-    // This is called by the RECEIVER - now async
-    const { transfers, peerConnections, updateTransferStatus } = get()
+    const { transfers, peerConnections } = get()
     const transferIndex = transfers.findIndex(
       (t) => t.fileId === transferId && t.direction === "incoming" && t.status === "pending",
     )
@@ -1164,9 +1203,8 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
       return
     }
 
-    const transferToUpdate = { ...transfers[transferIndex] } // Work with a copy
+    const transferToUpdate = { ...transfers[transferIndex] }
 
-    // Attempt to use File System Access API
     const hasShowSaveFilePicker = "showSaveFilePicker" in window
     const isShowSaveFilePickerFunction = typeof window.showSaveFilePicker === "function"
     console.log(
@@ -1181,7 +1219,7 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
           ? [
               {
                 description: "Original file type",
-                // Ensure MIME type is valid, fallback if not.
+
                 accept: {
                   [transferToUpdate.fileType && transferToUpdate.fileType.includes("/")
                     ? transferToUpdate.fileType
@@ -1189,7 +1227,7 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
                 },
               },
             ]
-          : [] // If no extension, pass empty array for types. Some browsers are strict.
+          : []
 
         console.log(
           `[WebRTC] Calling window.showSaveFilePicker with suggestedName: ${transferToUpdate.fileName}, types:`,
@@ -1211,8 +1249,6 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
           err,
         )
         if (err.name === "AbortError") {
-          // User cancelled the save dialog, treat as rejection
-          // Update status and send rejection message
           const updatedErrorTransfers = get().transfers.map((t) =>
             t.fileId === transferId ? ({ ...t, status: "error", error: "Save cancelled by user" } as FileTransfer) : t,
           )
@@ -1222,9 +1258,9 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
           if (connection && connection.dataChannel && connection.dataChannel.readyState === "open") {
             connection.dataChannel.send(JSON.stringify({ type: "file-rejected", data: { fileId: transferId } }))
           }
-          return // Stop further processing for this transfer
+          return
         }
-        // For other errors, we'll fall back to Blob method below
+
         transferToUpdate.usesFileSystemAccessAPI = false
       }
     } else {
@@ -1234,15 +1270,12 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
       transferToUpdate.usesFileSystemAccessAPI = false
     }
 
-    // Prepare the final state update for this transfer
     transferToUpdate.status = "transferring"
     transferToUpdate.startTime = Date.now()
-    // usesFileSystemAccessAPI, fileHandle, writableStream are already set on transferToUpdate if FSA was used
 
     const finalUpdatedTransfers = get().transfers.map((t) => (t.fileId === transferId ? transferToUpdate : t))
     set({ transfers: finalUpdatedTransfers })
 
-    // Send "file-accepted" message to the sender
     const connection = peerConnections.get(transferToUpdate.peerId)
     if (connection && connection.dataChannel && connection.dataChannel.readyState === "open") {
       console.log(`[WebRTC] Receiver accepting file ${transferId}. Sending file-accepted to ${transferToUpdate.peerId}`)
@@ -1256,7 +1289,7 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
       console.error(
         `[WebRTC] Cannot send file-accepted for ${transferId}: Data channel not open or connection missing.`,
       )
-      // Revert transfer status to error if acceptance couldn't be sent
+
       const revertedTransfers = get().transfers.map((t) =>
         t.fileId === transferId
           ? ({ ...t, status: "error", error: "Failed to send acceptance (channel issue)" } as FileTransfer)
@@ -1278,7 +1311,6 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
       )
       set({ transfers: updatedTransfers })
 
-      // Send "file-rejected" message to the sender
       const connection = peerConnections.get(transferToReject.peerId)
       if (connection && connection.dataChannel && connection.dataChannel.readyState === "open") {
         console.log(
@@ -1300,8 +1332,6 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
         `[WebRTC] rejectTransfer called for ${transferId}, but no pending incoming transfer found or status is not pending.`,
       )
     }
-    // We don't call get().cancelTransfer() here as that's more for an active transfer.
-    // The status is already set to error.
   },
 
   updateTransferProgress: (transferId: string, progress: number, speed: number, eta: number) => {
@@ -1352,7 +1382,6 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
   clearAllTransfers: () => {
     const { transfers, peerConnections } = get()
 
-    // Cancel all active transfers
     transfers.forEach((transfer) => {
       if (transfer.status === "transferring" || transfer.status === "paused") {
         const connection = peerConnections.get(transfer.peerId)
@@ -1370,7 +1399,6 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
       }
     })
 
-    // Clear all transfers from state
     set({ transfers: [] })
   },
 }))
