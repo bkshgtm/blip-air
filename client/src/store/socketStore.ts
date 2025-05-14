@@ -1,9 +1,10 @@
 import { create } from "zustand"
 import { io, type Socket } from "socket.io-client"
-import { useWebRTCStore } from "./webrtcStore" // Import the WebRTC store
+import { useWebRTCStore } from "./webrtcStore"
 import { useSettingsStore } from "./settingsStore"
 
-const VITE_SERVER_URL_CONFIG = import.meta.env.VITE_SERVER_URL || "192.168.1.76:3001"
+const VITE_SERVER_URL_CONFIG = import.meta.env.VITE_SERVER_URL || "blipair-webrtc.fly.dev"
+
 const VITE_SERVER_URL_BASE = VITE_SERVER_URL_CONFIG.replace(/^(wss?:\/\/)?/, "")
 
 let SERVER_URL: string
