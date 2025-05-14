@@ -1,4 +1,5 @@
 import express from "express";
+import http from "http";
 import https from "https";
 import fs from "fs";
 import path from "path";
@@ -12,26 +13,33 @@ const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const keyPath = path.resolve(__dirname, "key.pem");
-const certPath = path.resolve(__dirname, "cert.pem");
+// === Server setup ===
+let server;
+const PORT = process.env.PORT || 3001;
+const IS_PROD = process.env.NODE_ENV === "production";
 
-if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
-  console.error(
-    "SSL certificate files not found. Please ensure key.pem and cert.pem are in the server directory."
-  );
-  console.error(
-    "You can copy them from the 'client' directory if you generated them there for Vite."
-  );
-  process.exit(1);
+if (IS_PROD) {
+  // Fly handles HTTPS — use plain HTTP
+  server = http.createServer(app);
+} else {
+  // Dev mode — use self-signed HTTPS
+  const keyPath = path.resolve(__dirname, "key.pem");
+  const certPath = path.resolve(__dirname, "cert.pem");
+
+  if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
+    console.error("❌ SSL certs missing. Generate key.pem and cert.pem.");
+    process.exit(1);
+  }
+
+  const options = {
+    key: fs.readFileSync(keyPath),
+    cert: fs.readFileSync(certPath),
+  };
+
+  server = https.createServer(options, app);
 }
 
-const options = {
-  key: fs.readFileSync(keyPath),
-  cert: fs.readFileSync(certPath),
-};
-
-const server = https.createServer(options, app);
-
+// === Socket.IO setup ===
 const io = new Server(server, {
   cors: {
     origin: "*",
@@ -41,13 +49,22 @@ const io = new Server(server, {
 
 app.use(cors());
 
+// === Health check routes ===
+app.get("/", (req, res) => {
+  res.status(200).send("✅ BlipAir signaling server is running");
+});
+
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "healthy" });
+});
+
+// === Signaling logic ===
 const sessions = new Map();
 
 io.on("connection", (socket) => {
   console.log(`Client connected: ${socket.id}`);
 
   const sessionId = uuidv4();
-
   const sessionName = `User-${sessionId.substring(0, 4)}`;
 
   sessions.set(sessionId, {
@@ -57,7 +74,6 @@ io.on("connection", (socket) => {
   });
 
   socket.emit("session-created", sessionId);
-
   updatePeers();
 
   socket.on("set-name", (name) => {
@@ -71,29 +87,20 @@ io.on("connection", (socket) => {
 
   socket.on("relay-offer", ({ offer, peerId }) => {
     const peerSocketId = findSocketIdBySessionId(peerId);
-
     if (peerSocketId) {
-      io.to(peerSocketId).emit("relay-offer", {
-        offer,
-        from: sessionId,
-      });
+      io.to(peerSocketId).emit("relay-offer", { offer, from: sessionId });
     }
   });
 
   socket.on("relay-answer", ({ answer, peerId }) => {
     const peerSocketId = findSocketIdBySessionId(peerId);
-
     if (peerSocketId) {
-      io.to(peerSocketId).emit("relay-answer", {
-        answer,
-        from: sessionId,
-      });
+      io.to(peerSocketId).emit("relay-answer", { answer, from: sessionId });
     }
   });
 
   socket.on("relay-ice-candidate", ({ candidate, peerId }) => {
     const peerSocketId = findSocketIdBySessionId(peerId);
-
     if (peerSocketId) {
       io.to(peerSocketId).emit("relay-ice-candidate", {
         candidate,
@@ -104,14 +111,12 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     console.log(`Client disconnected: ${socket.id}`);
-
     for (const [id, session] of sessions.entries()) {
       if (session.socketId === socket.id) {
         sessions.delete(id);
         break;
       }
     }
-
     updatePeers();
   });
 });
@@ -131,7 +136,7 @@ function updatePeers() {
   }
 }
 
-const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// === Start server ===
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`✅ Server running on port ${PORT}`);
 });

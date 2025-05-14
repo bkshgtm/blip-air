@@ -8,13 +8,12 @@ import {
   Progress,
   IconButton,
   useColorModeValue,
-  Badge,
   Divider,
   Heading,
   Button,
 } from "@chakra-ui/react"
 import { motion } from "framer-motion"
-import { Download, FileIcon, Pause, Play, X } from "lucide-react"
+import { Download, FileIcon, Pause, Play, X, Check, Clock, AlertCircle, Loader2 } from "lucide-react"
 import { useWebRTCStore } from "../store/webrtcStore"
 import { formatFileSize, formatSpeed, formatTime } from "../lib/chunking"
 
@@ -26,21 +25,6 @@ const TransferList = () => {
   const bgColor = useColorModeValue("glass.200", "darkGlass.200")
   const borderColor = useColorModeValue("glass.300", "darkGlass.100")
   const itemBgColor = useColorModeValue("glass.100", "darkGlass.100")
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "green"
-      case "transferring":
-        return "blue"
-      case "paused":
-        return "yellow"
-      case "error":
-        return "red"
-      default:
-        return "gray"
-    }
-  }
 
   return (
     <VStack
@@ -93,7 +77,11 @@ const TransferList = () => {
                     </VStack>
                   </HStack>
 
-                  <Badge colorScheme={getStatusColor(transfer.status)}>{transfer.status}</Badge>
+                  {transfer.status === "completed" && <Check size={18} color="#22c55e" />}
+                  {transfer.status === "transferring" && <Loader2 size={18} color="#3b82f6" className="animate-spin" />}
+                  {transfer.status === "paused" && <Pause size={18} color="#eab308" />}
+                  {transfer.status === "error" && <AlertCircle size={18} color="#ef4444" />}
+                  {transfer.status === "pending" && <Clock size={18} color="#64748b" />}
                 </HStack>
 
                 {transfer.status === "pending" && transfer.direction === "incoming" ? (

@@ -52,7 +52,7 @@ const HomePage = () => {
           <MotionBox initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
             <VStack spacing={6} textAlign="center">
               <MotionHeading
-                fontSize={{ base: "4xl", md: "6xl" }}
+                fontSize={{ base: "4xl", md: "5xl" }}
                 fontWeight="black"
                 letterSpacing="tighter"
                 bgGradient="linear(to-r, brand.300, brand.400, brand.600)"

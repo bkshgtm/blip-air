@@ -1,7 +1,7 @@
 "use client"
 
 import { Box, Text, VStack, HStack, Button, useColorModeValue, Badge, Divider, Heading, Icon } from "@chakra-ui/react"
-import { Send, UserCircle } from "lucide-react" // Added UserCircle
+import { Send, UserCircle } from "lucide-react"
 import { useSocketStore } from "../store/socketStore"
 import { useWebRTCStore } from "../store/webrtcStore"
 

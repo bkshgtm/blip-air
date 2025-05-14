@@ -6,7 +6,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "deploy": "fly deploy",
+    "health": "node -e \"import('node-fetch').then(m=>m.default('http://localhost:3001/health')).catch(()=>process.exit(1))\""
   },
   "dependencies": {
     "cors": "^2.8.5",

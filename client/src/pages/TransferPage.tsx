@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useRef, lazy, Suspense, useMemo } from "react"
-import { useMobile } from "../components/ui/use-mobile"
 import { useLocation } from "react-router-dom"
 import {
   Container,
@@ -133,21 +132,17 @@ const TransferPage = () => {
     },
   }
 
-  const cardVariants = useMemo(() => {
-    const isMobile = useMobile()
-    return {
-      hidden: { opacity: 0, y: isMobile ? 0 : 20 },
+  const cardVariants = useMemo(
+    () => ({
+      hidden: { opacity: 0, y: 20 },
       visible: (delay: number) => ({
         opacity: 1,
         y: 0,
-        transition: {
-          delay,
-          duration: isMobile ? 0.15 : 0.3,
-          type: isMobile ? "tween" : "spring",
-        },
+        transition: { delay, duration: 0.3 },
       }),
-    }
-  }, [useMobile])
+    }),
+    [],
+  )
 
   const headingVariants = {
     hidden: { opacity: 0 },
@@ -255,23 +250,21 @@ const TransferPage = () => {
             custom={0.3}
             variants={cardVariants}
           >
-            {!useMobile() && (
-              <MotionBox
-                position={"absolute" as any}
-                bottom={0}
-                left="50%"
-                height="80%"
-                width="80%"
-                bgGradient={accentGradient}
-                opacity={0.08}
-                borderRadius="3xl"
-                filter="blur(60px)"
-                transform="translate(-50%, 30%)"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 0.15 }}
-                transition={{ delay: 0.3, duration: 0.7 }}
-              />
-            )}
+            <MotionBox
+              position={"absolute" as any}
+              bottom={0}
+              left="50%"
+              height="80%"
+              width="80%"
+              bgGradient={accentGradient}
+              opacity={0.08}
+              borderRadius="3xl"
+              filter="blur(60px)"
+              transform="translate(-50%, 30%)"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.15 }}
+              transition={{ delay: 0.3, duration: 0.7 }}
+            />
 
             <MotionFlex
               align="center"
