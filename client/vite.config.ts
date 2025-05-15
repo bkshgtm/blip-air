@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react"
 import path from "path"
 
 export default defineConfig({
+  base: "./",
   plugins: [
     react({
       babel: {
@@ -18,6 +19,9 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  optimizeDeps: {
+    include: ["react", "react-dom"],
+  },
   server: {
     port: 5173,
     host: true,
@@ -27,20 +31,14 @@ export default defineConfig({
     },
   },
   build: {
-    minify: "terser",
-    terserOptions: {
-      compress: {
-        drop_console: true,
-        drop_debugger: true,
-      },
-    },
     chunkSizeWarningLimit: 1000,
+    commonjsOptions: {
+      include: [/node_modules/],
+    },
     rollupOptions: {
       output: {
         manualChunks: {
           react: ["react", "react-dom"],
-          chakra: ["@chakra-ui/react", "@emotion/react", "@emotion/styled"],
-          animation: ["framer-motion"],
           webrtc: ["socket.io-client"],
         },
       },

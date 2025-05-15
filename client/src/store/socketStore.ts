@@ -3,20 +3,12 @@ import { io, type Socket } from "socket.io-client"
 import { useWebRTCStore } from "./webrtcStore"
 import { useSettingsStore } from "./settingsStore"
 
-const VITE_SERVER_URL_CONFIG = import.meta.env.VITE_SERVER_URL || "blipair-webrtc.fly.dev"
+const BASE_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3001"
+const SERVER_URL = BASE_URL.replace(/^http/, "ws").replace(/^https/, "wss")
 
-const VITE_SERVER_URL_BASE = VITE_SERVER_URL_CONFIG.replace(/^(wss?:\/\/)?/, "")
+console.log(`[SocketStore] Connecting to WebSocket URL: ${SERVER_URL}`)
 
-let SERVER_URL: string
-
-if (typeof window !== "undefined") {
-  const protocol = window.location.protocol === "https:" ? "wss://" : "ws://"
-  SERVER_URL = `${protocol}${VITE_SERVER_URL_BASE}`
-  console.log(`[SocketStore] Determined SERVER_URL: ${SERVER_URL}`)
-} else {
-  SERVER_URL = `ws://${VITE_SERVER_URL_BASE}`
-  console.log(`[SocketStore] Fallback SERVER_URL (non-browser): ${SERVER_URL}`)
-}
+const CONNECTION_TIMEOUT = 10000
 
 interface PeerInfo {
   id: string
@@ -48,52 +40,66 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     const newSocket = io(SERVER_URL, {
       transports: ["websocket"],
-      autoConnect: true,
-      withCredentials: true,
+      autoConnect: false,
+      withCredentials: false,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      timeout: CONNECTION_TIMEOUT,
     })
 
+    const timeoutId = setTimeout(() => {
+      if (!newSocket.connected) {
+        console.error("WebSocket connection timed out.")
+        newSocket.disconnect()
+      }
+    }, CONNECTION_TIMEOUT)
+
+    newSocket.connect()
+
     newSocket.on("connect", () => {
-      console.log("Connected to signaling server")
+      clearTimeout(timeoutId)
+      console.log("✅ Connected to signaling server")
       set({ isConnected: true })
       if (sessionName) {
         newSocket.emit("set-name", sessionName)
       }
     })
 
+    newSocket.on("connect_error", (err) => {
+      console.error("Connection error:", err.message)
+      clearTimeout(timeoutId)
+      setTimeout(() => {
+        console.log("Attempting to reconnect...")
+        newSocket.connect()
+      }, 2000)
+    })
+
     newSocket.on("disconnect", () => {
-      console.log("Disconnected from signaling server")
+      console.log("❌ Disconnected from signaling server")
       set({ isConnected: false })
     })
 
     newSocket.on("session-created", (sessionId: string) => {
-      console.log("Session created:", sessionId)
+      console.log("Session ID received:", sessionId)
       set({ sessionId })
     })
 
-    newSocket.on("peers-updated", (peersData: Array<{ id: string; name: string }>) => {
-      console.log("Peers updated:", peersData)
-      const currentUserId = newSocket.id
-      const updatedPeers = peersData.map((peer) => {
-        if (peer.id === currentUserId) {
-          return { ...peer, name: sessionName }
-        }
-        return peer
-      })
-      set({ peers: updatedPeers })
+    newSocket.on("peers-updated", (peerList: PeerInfo[]) => {
+      const currentId = newSocket.id
+      const updated = peerList.map((peer) => (peer.id === currentId ? { ...peer, name: sessionName } : peer))
+      set({ peers: updated })
     })
 
     newSocket.on("relay-offer", ({ offer, from }) => {
-      console.log(`[SocketStore] Received relay-offer from ${from}`)
       useWebRTCStore.getState().handleRelayOffer(offer, from)
     })
 
     newSocket.on("relay-answer", ({ answer, from }) => {
-      console.log(`[SocketStore] Received relay-answer from ${from}`)
       useWebRTCStore.getState().handleRelayAnswer(answer, from)
     })
 
     newSocket.on("relay-ice-candidate", ({ candidate, from }) => {
-      console.log(`[SocketStore] Received relay-ice-candidate from ${from}`)
       useWebRTCStore.getState().handleRelayIceCandidate(candidate, from)
     })
 
@@ -108,11 +114,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     }
   },
 
-  setSessionId: (id: string) => {
-    set({ sessionId: id })
-  },
+  setSessionId: (id: string) => set({ sessionId: id }),
 
-  setPeers: (peers: PeerInfo[]) => {
-    set({ peers })
-  },
+  setPeers: (peers: PeerInfo[]) => set({ peers }),
 }))

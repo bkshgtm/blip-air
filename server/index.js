@@ -1,2 +1,2 @@
 // Entry point for the server
-import "./server.js"
+import "./server.js";

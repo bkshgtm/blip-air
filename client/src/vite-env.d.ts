@@ -1,5 +1,7 @@
 interface ImportMetaEnv {
-  readonly VITE_SERVER_URL: string
+  readonly VITE_SERVER_URL?: string
+  readonly VITE_WS_URL?: string
+  readonly MODE: "development" | "production" | "test"
 }
 
 interface ImportMeta {

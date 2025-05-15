@@ -1,217 +1,195 @@
 "use client"
 
-import React from "react"
-import {
-  Box,
-  Button,
-  Container,
-  FormControl,
-  FormLabel,
-  Heading,
-  Input,
-  SimpleGrid,
-  Slider,
-  SliderFilledTrack,
-  SliderThumb,
-  SliderTrack,
-  Switch,
-  Text,
-  VStack,
-  useColorModeValue,
-  useToast,
-} from "@chakra-ui/react"
 import { motion } from "framer-motion"
 import { useSettingsStore } from "../store/settingsStore"
 import { formatFileSize } from "../lib/chunking"
-import GlassCard from "../components/GlassCard"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { Slider } from "@/components/ui/slider"
+import { Separator } from "@/components/ui/separator"
+import { useTheme } from "../components/theme-provider"
+import { useToast } from "@/hooks/use-toast"
+import { useState } from "react"
 
-const MotionBox = motion(Box)
+const SettingsPage = () => {
+  const { sessionName, pin, chunkSize, useCompression, setSessionName, setPin, setChunkSize, toggleCompression } =
+    useSettingsStore()
 
-const SettingsPage: React.FC = () => {
-  const {
-    sessionName,
-    pin,
-    darkMode,
-    chunkSize,
-    useCompression,
-    setSessionName,
-    setPin,
-    toggleDarkMode,
-    setChunkSize,
-    toggleCompression,
-  } = useSettingsStore()
-  const toast = useToast({ position: "bottom" })
+  const [localSessionName, setLocalSessionName] = useState(sessionName)
+  const [localPin, setLocalPin] = useState(pin)
+  const [localChunkSize, setLocalChunkSize] = useState(chunkSize)
+  const [localUseCompression, setLocalUseCompression] = useState(useCompression)
 
-  const headingColor = useColorModeValue("gray.800", "whiteAlpha.900")
-  const accentGradient = useColorModeValue("linear(to-br, brand.400, brand.600)", "linear(to-br, brand.300, brand.500)")
+  const { theme } = useTheme()
+  const { toast } = useToast()
+  const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)
+
+  const handleSaveSettings = () => {
+    setSessionName(localSessionName)
+    setPin(localPin)
+    setChunkSize(localChunkSize)
+    if (localUseCompression !== useCompression) {
+      toggleCompression()
+    }
+
+    toast({
+      title: "Settings saved",
+      description: "Your settings have been saved successfully",
+      variant: isDark ? "glass" : "default",
+    })
+  }
 
   return (
-    <Container maxW="container.md" py={8}>
-      <VStack spacing={8} align="stretch">
-        <MotionBox
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: "easeOut" }}
+    <div className="container max-w-3xl mx-auto py-8 space-y-8">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <h1
+          className={`text-2xl font-display font-medium tracking-tight mb-6 ${
+            isDark ? "text-white/90" : "text-black/90"
+          }`}
         >
-          <Heading size="2xl" mb={20} color={headingColor} textAlign="center">
-            Settings
-          </Heading>
+          Settings
+        </h1>
 
-          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={8}>
-            {/* Profile Settings */}
-            <GlassCard
-              p={8}
-              position="relative"
-              overflow="hidden"
-              borderWidth="1px"
-              borderColor={useColorModeValue("rgba(230,235,240,0.3)", "rgba(60,70,80,0.3)")}
-              borderRadius="xl"
-            >
-              <Box
-                position="absolute"
-                bottom={0}
-                left="50%"
-                height="80%"
-                width="80%"
-                bgGradient={accentGradient}
-                opacity={0.08}
-                borderRadius="3xl"
-                filter="blur(60px)"
-                transform="translate(-50%, 30%)"
-              />
-              <Heading size="md" mb={4}>
-                Profile Settings
-              </Heading>
-              <VStack spacing={6} align="stretch">
-                <FormControl>
-                  <FormLabel>Session Name</FormLabel>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+          >
+            <Card className={isDark ? "glass-card" : "glass-card-light"}>
+              <CardHeader className="pb-2">
+                <CardTitle className={`text-lg ${isDark ? "text-white/90" : "text-black/90"} font-medium`}>
+                  Profile Settings
+                </CardTitle>
+              </CardHeader>
+              <Separator className={isDark ? "bg-white/5" : "bg-black/5"} />
+              <CardContent className="pt-4 space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="session-name" className={isDark ? "text-white/70" : "text-black/70"}>
+                    Session Name
+                  </Label>
                   <Input
-                    value={sessionName}
-                    onChange={(e) => setSessionName(e.target.value)}
+                    id="session-name"
+                    value={localSessionName}
+                    onChange={(e) => setLocalSessionName(e.target.value)}
                     placeholder="Enter a name for your session"
-                    variant="filled"
-                    bg={useColorModeValue("rgba(0,0,0,0.06)", "rgba(255,255,255,0.06)")}
-                    _hover={{ bg: useColorModeValue("rgba(0,0,0,0.1)", "rgba(255,255,255,0.1)") }}
-                    color={useColorModeValue("gray.800", "whiteAlpha.900")}
+                    className={
+                      isDark
+                        ? "glass bg-white/5 border-white/10 text-white/80 focus:border-white/20 focus:ring-white/10"
+                        : "glass-light bg-black/5 border-black/10 text-black/80 focus:border-black/20 focus:ring-black/10"
+                    }
                   />
-                </FormControl>
+                </div>
 
-                <FormControl>
-                  <FormLabel>PIN Code</FormLabel>
+                <div className="space-y-2">
+                  <Label htmlFor="pin" className={isDark ? "text-white/70" : "text-black/70"}>
+                    PIN Code
+                  </Label>
                   <Input
-                    value={pin}
-                    onChange={(e) => setPin(e.target.value)}
+                    id="pin"
+                    value={localPin}
+                    onChange={(e) => setLocalPin(e.target.value)}
                     placeholder="Enter a PIN for secure connections"
                     maxLength={4}
-                    variant="filled"
-                    bg={useColorModeValue("rgba(0,0,0,0.06)", "rgba(255,255,255,0.06)")}
-                    _hover={{ bg: useColorModeValue("rgba(0,0,0,0.1)", "rgba(255,255,255,0.1)") }}
-                    color={useColorModeValue("gray.800", "whiteAlpha.900")}
+                    className={
+                      isDark
+                        ? "glass bg-white/5 border-white/10 text-white/80 focus:border-white/20 focus:ring-white/10"
+                        : "glass-light bg-black/5 border-black/10 text-black/80 focus:border-black/20 focus:ring-black/10"
+                    }
                   />
-                  <Text fontSize="sm" color="whiteAlpha.600" mt={1}>
-                    Required for other devices to connect
-                  </Text>
-                </FormControl>
-              </VStack>
-            </GlassCard>
+                  <p className={`text-xs ${isDark ? "text-white/40" : "text-black/40"} mt-1`}>
+                    This PIN will be required for other devices to connect
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
 
-            <GlassCard
-              p={8}
-              position="relative"
-              overflow="hidden"
-              borderWidth="1px"
-              borderColor={useColorModeValue("rgba(230,235,240,0.3)", "rgba(60,70,80,0.3)")}
-              borderRadius="xl"
-            >
-              <Box
-                position="absolute"
-                top={0}
-                right={0}
-                height="50%"
-                width="50%"
-                bgGradient={accentGradient}
-                opacity={0.08}
-                borderRadius="full"
-                filter="blur(40px)"
-                transform="translate(30%, -30%)"
-              />
-              <Heading size="md" mb={4}>
-                Appearance & Performance
-              </Heading>
-              <VStack spacing={6} align="stretch">
-                <FormControl display="flex" alignItems="center">
-                  <FormLabel htmlFor="dark-mode" mb="0">
-                    Dark Mode
-                  </FormLabel>
-                  <Switch id="dark-mode" isChecked={darkMode} onChange={toggleDarkMode} colorScheme="brand" />
-                </FormControl>
-
-                <FormControl>
-                  <FormLabel>Chunk Size: {formatFileSize(chunkSize)}</FormLabel>
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          >
+            <Card className={isDark ? "glass-card" : "glass-card-light"}>
+              <CardHeader className="pb-2">
+                <CardTitle className={`text-lg ${isDark ? "text-white/90" : "text-black/90"} font-medium`}>
+                  Appearance & Performance
+                </CardTitle>
+              </CardHeader>
+              <Separator className={isDark ? "bg-white/5" : "bg-black/5"} />
+              <CardContent className="pt-4 space-y-6">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="chunk-size" className={isDark ? "text-white/70" : "text-black/70"}>
+                      Chunk Size
+                    </Label>
+                    <span className={`text-sm ${isDark ? "text-white/60" : "text-black/60"}`}>
+                      {formatFileSize(localChunkSize)}
+                    </span>
+                  </div>
                   <Slider
+                    id="chunk-size"
                     min={16 * 1024}
                     max={256 * 1024}
                     step={16 * 1024}
-                    value={chunkSize}
-                    onChange={setChunkSize}
-                    colorScheme="brand"
-                  >
-                    <SliderTrack>
-                      <SliderFilledTrack />
-                    </SliderTrack>
-                    <SliderThumb boxSize={6} />
-                  </Slider>
-                  <Text fontSize="sm" color="whiteAlpha.600" mt={1}>
-                    Smaller chunks help unstable networks
-                  </Text>
-                </FormControl>
+                    value={[localChunkSize]}
+                    onValueChange={(value) => setLocalChunkSize(value[0])}
+                    className={
+                      isDark
+                        ? "[&>span]:bg-white/20 [&>span]:hover:bg-white/30"
+                        : "[&>span]:bg-black/20 [&>span]:hover:bg-black/30"
+                    }
+                  />
+                  <p className={`text-xs ${isDark ? "text-white/40" : "text-black/40"} mt-1`}>
+                    Smaller chunks are better for unstable connections
+                  </p>
+                </div>
 
-                <FormControl display="flex" alignItems="center">
-                  <FormLabel htmlFor="compression" mb="0">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="compression" className={isDark ? "text-white/70" : "text-black/70"}>
                     Use Compression
-                  </FormLabel>
+                  </Label>
                   <Switch
                     id="compression"
-                    isChecked={useCompression}
-                    onChange={toggleCompression}
-                    colorScheme="brand"
+                    checked={localUseCompression}
+                    onCheckedChange={setLocalUseCompression}
+                    className={
+                      isDark
+                        ? "bg-white/10 data-[state=checked]:bg-white/30"
+                        : "bg-black/10 data-[state=checked]:bg-black/30"
+                    }
                   />
-                </FormControl>
-              </VStack>
-            </GlassCard>
-          </SimpleGrid>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
 
-          <Box mt={10} textAlign="center">
-            <Button
-              size="lg"
-              px={10}
-              py={6}
-              variant="qrGlass"
-              fontWeight="semibold"
-              borderRadius="xl"
-              _hover={{
-                transform: "translateY(-1px)",
-              }}
-              _active={{
-                transform: "translateY(0)",
-              }}
-              transition="all 0.15s ease"
-              onClick={() => {
-                toast({
-                  title: "Settings saved",
-                  description: "Your preferences have been saved",
-                  status: "success",
-                  duration: 3000,
-                  isClosable: true,
-                })
-              }}
-            >
-              Save Settings
-            </Button>
-          </Box>
-        </MotionBox>
-      </VStack>
-    </Container>
+        <motion.div
+          className="mt-8 text-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+        >
+          <Button
+            size="lg"
+            className={`rounded-full px-8 ${
+              isDark ? "bg-white/10 hover:bg-white/20 text-white" : "bg-black/10 hover:bg-black/20 text-black"
+            }`}
+            onClick={handleSaveSettings}
+          >
+            Save Settings
+          </Button>
+        </motion.div>
+      </motion.div>
+    </div>
   )
 }
 

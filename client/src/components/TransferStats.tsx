@@ -1,98 +1,121 @@
 "use client"
 
-import {
-  Box,
-  Text,
-  VStack,
-  HStack,
-  CircularProgress,
-  CircularProgressLabel,
-  Stat,
-  StatLabel,
-  StatNumber,
-  StatHelpText,
-  SimpleGrid,
-} from "@chakra-ui/react"
 import { motion } from "framer-motion"
 import { useWebRTCStore } from "../store/webrtcStore"
 import { formatFileSize, formatSpeed } from "../lib/chunking"
-
-const MotionBox = motion(Box)
+import { Card, CardContent } from "./ui/card"
+import { useTheme } from "./theme-provider"
 
 const TransferStats = () => {
   const { transfers } = useWebRTCStore()
+  const { theme } = useTheme()
+  const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)
 
   const activeTransfers = transfers.filter((t) => t.status === "transferring" || t.status === "paused")
-
   const completedTransfers = transfers.filter((t) => t.status === "completed")
-
-  const activeTotalSize = activeTransfers.reduce((acc, t) => acc + t.fileSize, 0)
-  const activeTransferred = activeTransfers.reduce((acc, t) => acc + t.fileSize * t.progress, 0)
-  const activeProgress = activeTotalSize > 0 ? activeTransferred / activeTotalSize : 0
-
+  const totalSize = transfers.reduce((acc, t) => acc + t.fileSize, 0)
+  const totalTransferred = transfers.reduce((acc, t) => acc + t.fileSize * t.progress, 0)
   const averageSpeed =
     activeTransfers.length > 0 ? activeTransfers.reduce((acc, t) => acc + t.speed, 0) / activeTransfers.length : 0
+  const overallProgress = totalSize > 0 ? totalTransferred / totalSize : 0
 
   return (
-    <MotionBox
-      p={4}
-      borderRadius="xl"
-      border="none"
-      position="relative"
-      overflow="hidden"
-      bg="transparent"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-    >
-      {transfers.length > 0 ? (
-        <SimpleGrid columns={{ base: 1, md: 4 }} spacing={4} bg="transparent">
-          <HStack spacing={4}>
-            <CircularProgress value={activeProgress * 100} color="brand.400" size="80px" thickness="8px">
-              <CircularProgressLabel>{Math.round(activeProgress * 100)}%</CircularProgressLabel>
-            </CircularProgress>
-            <VStack align="start" spacing={0}>
-              <Text fontSize="sm" color="gray.500">
-                Active Progress
-              </Text>
-              <Text>
-                {formatFileSize(activeTransferred)} / {formatFileSize(activeTotalSize)}
-              </Text>
-            </VStack>
-          </HStack>
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+      <Card className={isDark ? "glass-card" : "glass-card-light"}>
+        <CardContent className="p-3 sm:p-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="relative h-12 w-12 sm:h-16 sm:w-16">
+                <svg className="h-12 w-12 sm:h-16 sm:w-16 transform -rotate-90" viewBox="0 0 48 48">
+                  <circle
+                    cx="24"
+                    cy="24"
+                    r="21"
+                    stroke="currentColor"
+                    strokeOpacity="0.1"
+                    strokeWidth="5"
+                    fill="none"
+                    className={isDark ? "text-white" : "text-black"}
+                  />
+                  <circle
+                    cx="24"
+                    cy="24"
+                    r="21"
+                    stroke="currentColor"
+                    strokeOpacity="0.6"
+                    strokeWidth="5"
+                    fill="none"
+                    strokeDasharray={21 * 2 * Math.PI}
+                    strokeDashoffset={21 * 2 * Math.PI * (1 - overallProgress)}
+                    className={`transition-all duration-300 ${isDark ? "text-white" : "text-black"}`}
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className={`text-xs sm:text-sm font-medium ${isDark ? "text-white/90" : "text-black/90"}`}>
+                    {Math.round(overallProgress * 100)}%
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-0.5 sm:space-y-1">
+                <p className={`text-xs sm:text-sm ${isDark ? "text-white/50" : "text-black/50"}`}>Overall Progress</p>
+                <p className={`text-xs sm:text-sm ${isDark ? "text-white/80" : "text-black/80"}`}>
+                  {formatFileSize(totalTransferred)} / {formatFileSize(totalSize)}
+                </p>
+              </div>
+            </div>
 
-          <Stat>
-            <StatLabel>Active Transfers</StatLabel>
-            <StatNumber>{activeTransfers.length}</StatNumber>
-            <StatHelpText>
-              {activeTransfers.length > 0 ? `${activeTransfers.length} in progress` : "No active transfers"}
-            </StatHelpText>
-          </Stat>
+            <div className="space-y-0.5 sm:space-y-1">
+              <p className={`text-xs sm:text-sm ${isDark ? "text-white/50" : "text-black/50"}`}>Active Transfers</p>
+              <motion.p
+                key={`active-${activeTransfers.length}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+                className={`text-base sm:text-xl font-semibold ${isDark ? "text-white/90" : "text-black/90"}`}
+              >
+                {activeTransfers.length}
+              </motion.p>
+              <p className={`text-[10px] sm:text-xs ${isDark ? "text-white/40" : "text-black/40"}`}>
+                {activeTransfers.length > 0 ? `${activeTransfers.length} in progress` : "No active transfers"}
+              </p>
+            </div>
 
-          <Stat>
-            <StatLabel>Completed</StatLabel>
-            <StatNumber>{completedTransfers.length}</StatNumber>
-            <StatHelpText>
-              {completedTransfers.length > 0
-                ? `${formatFileSize(completedTransfers.reduce((acc, t) => acc + t.fileSize, 0))} transferred`
-                : "No completed transfers"}
-            </StatHelpText>
-          </Stat>
+            <div className="space-y-0.5 sm:space-y-1">
+              <p className={`text-xs sm:text-sm ${isDark ? "text-white/50" : "text-black/50"}`}>Completed</p>
+              <motion.p
+                key={`completed-${completedTransfers.length}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+                className={`text-base sm:text-xl font-semibold ${isDark ? "text-white/90" : "text-black/90"}`}
+              >
+                {completedTransfers.length}
+              </motion.p>
+              <p className={`text-[10px] sm:text-xs ${isDark ? "text-white/40" : "text-black/40"}`}>
+                {completedTransfers.length > 0
+                  ? `${formatFileSize(completedTransfers.reduce((acc, t) => acc + t.fileSize, 0))} transferred`
+                  : "No completed transfers"}
+              </p>
+            </div>
 
-          <Stat>
-            <StatLabel>Current Speed</StatLabel>
-            <StatNumber>{formatSpeed(averageSpeed)}</StatNumber>
-            <StatHelpText>
-              {activeTransfers.length > 0 ? `Across ${activeTransfers.length} transfers` : "No active transfers"}
-            </StatHelpText>
-          </Stat>
-        </SimpleGrid>
-      ) : (
-        <Text textAlign="center" color="gray.500">
-          No transfer statistics available yet.
-        </Text>
-      )}
-    </MotionBox>
+            <div className="space-y-0.5 sm:space-y-1">
+              <p className={`text-xs sm:text-sm ${isDark ? "text-white/50" : "text-black/50"}`}>Current Speed</p>
+              <motion.p
+                key={`speed-${Math.floor(averageSpeed / 1024)}`}
+                initial={{ opacity: 1 }}
+                animate={{ opacity: 1 }}
+                className={`text-base sm:text-xl font-semibold ${isDark ? "text-white/90" : "text-black/90"}`}
+              >
+                {formatSpeed(averageSpeed)}
+              </motion.p>
+              <p className={`text-[10px] sm:text-xs ${isDark ? "text-white/40" : "text-black/40"}`}>
+                {activeTransfers.length > 0 ? `Across ${activeTransfers.length} transfers` : "No active transfers"}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
   )
 }
 

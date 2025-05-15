@@ -9,11 +9,6 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@chakra-ui/react": "latest",
-    "@chakra-ui/styled-system": "latest",
-    "@chakra-ui/theme-tools": "latest",
-    "@emotion/is-prop-valid": "latest",
-    "@emotion/react": "latest",
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-accordion": "1.2.2",
     "@radix-ui/react-alert-dialog": "1.1.4",
@@ -50,7 +45,6 @@
     "date-fns": "4.1.0",
     "embla-carousel-react": "8.5.1",
     "express": "latest",
-    "framer-motion": "latest",
     "http": "latest",
     "immer": "latest",
     "input-otp": "1.4.1",
@@ -97,7 +91,7 @@
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.3",
-    "tailwindcss": "^3.4.17",
+    "tailwindcss": "^4.1.6",
     "typescript": "^5"
   }
 }

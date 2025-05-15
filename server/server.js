@@ -13,21 +13,24 @@ const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// === Server setup ===
 let server;
 const PORT = process.env.PORT || 3001;
 const IS_PROD = process.env.NODE_ENV === "production";
 
 if (IS_PROD) {
-  // Fly handles HTTPS — use plain HTTP
-  server = http.createServer(app);
+  server = http.createServer(
+    {
+      insecureHTTPParser: false,
+      keepAlive: true,
+    },
+    app
+  );
 } else {
-  // Dev mode — use self-signed HTTPS
   const keyPath = path.resolve(__dirname, "key.pem");
   const certPath = path.resolve(__dirname, "cert.pem");
 
   if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
-    console.error("❌ SSL certs missing. Generate key.pem and cert.pem.");
+    console.error(" SSL certs missing. Generate key.pem and cert.pem.");
     process.exit(1);
   }
 
@@ -42,12 +45,30 @@ if (IS_PROD) {
 // === Socket.IO setup ===
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: IS_PROD ? ["https://your-client-domain.com"] : "*",
     methods: ["GET", "POST"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"],
   },
+  transports: ["websocket", "polling"],
+  allowEIO3: true, // Allow Engine.IO 3 compatibility
 });
 
-app.use(cors());
+// More specific CORS for Express
+app.use(
+  cors({
+    origin: IS_PROD
+      ? ["https://your-client-domain.com"]
+      : [
+          "https://localhost:5173",
+          "https://127.0.0.1:5173",
+          "https://192.168.1.76:5173",
+        ],
+    methods: ["GET", "POST", "OPTIONS"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
 // === Health check routes ===
 app.get("/", (req, res) => {
@@ -57,6 +78,15 @@ app.get("/", (req, res) => {
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "healthy" });
 });
+
+// Only serve static files in production
+if (IS_PROD) {
+  app.use(express.static(path.join(__dirname, "../client/dist")));
+  // Handle client-side routing
+  app.get(/^\/(?!api|health|socket\.io).*/, (req, res) => {
+    res.sendFile(path.join(__dirname, "../client/dist/index.html"));
+  });
+}
 
 // === Signaling logic ===
 const sessions = new Map();

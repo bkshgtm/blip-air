@@ -1,181 +1,103 @@
 "use client"
 
-import { useEffect } from "react"
-import { useNavigate } from "react-router-dom"
-import { Container, VStack, SimpleGrid, Heading, Text, Icon, Button, useColorModeValue, Box } from "@chakra-ui/react"
 import { motion } from "framer-motion"
-import { FileUp, Lock, Wifi, Zap, QrCode } from "lucide-react"
-import { useSocketStore } from "../store/socketStore"
+import { Button } from "../components/ui/button"
+import { useNavigate } from "react-router-dom"
 import { useUiStore } from "../store/uiStore"
-import GlassCard from "../components/GlassCard"
-
-const MotionBox = motion(Box)
-const MotionHeading = motion(Heading)
-const MotionText = motion(Text)
-const MotionButton = motion(Button)
+import { useTheme } from "../components/theme-provider"
+import { Shield, Zap, Lock } from "lucide-react"
 
 const HomePage = () => {
   const navigate = useNavigate()
-  const { isConnected } = useSocketStore()
   const { openQrCodeModal } = useUiStore()
-
-  const accentGradient = useColorModeValue("linear(to-br, brand.400, brand.600)", "linear(to-br, brand.300, brand.500)")
+  const { theme } = useTheme()
+  const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)
 
   const features = [
     {
-      icon: Wifi,
-      title: "Direct Connections",
-      description: "Fast peer-to-peer transfers that work anywhere with automatic fallback when needed.",
+      title: "LAN Only",
+      description: "Works only on your local network for maximum privacy and speed",
+      icon: <Lock className="w-7 h-7" />,
     },
     {
-      icon: Lock,
       title: "End-to-End Encryption",
-      description: "WebRTC's encryption keeps your files secure during transit.",
+      description: "WebRTC encryption keeps your files secure during transfer",
+      icon: <Shield className="w-7 h-7" />,
     },
     {
-      icon: Zap,
-      title: "Lightning Fast",
-      description: "Peer-to-peer streams with minimum relay latency.",
+      title: "Fast Transfers",
+      description: "Direct peer-to-peer connection for lightning-fast file sharing",
+      icon: <Zap className="w-7 h-7" />,
     },
   ]
 
-  useEffect(() => {
-    if (!isConnected) {
-    }
-  }, [isConnected])
-
   return (
-    <Container maxW="container.xl" py={8}>
-      <VStack spacing={8} align="stretch">
-        {/* HERO */}
-        <GlassCard w="full" p={10}>
-          <MotionBox initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-            <VStack spacing={6} textAlign="center">
-              <MotionHeading
-                fontSize={{ base: "4xl", md: "5xl" }}
-                fontWeight="black"
-                letterSpacing="tighter"
-                bgGradient="linear(to-r, brand.300, brand.400, brand.600)"
-                bgClip="text"
-                initial={{ opacity: 0, y: -20 }}
-                animate={{
-                  opacity: 1,
-                  y: 0,
-                  textShadow: [
-                    "0 0 8px rgba(99, 102, 241, 0)",
-                    "0 0 12px rgba(255, 255, 255, 0.3)",
-                    "0 0 8px rgba(99, 102, 241, 0)",
-                  ],
-                }}
-                transition={{
-                  delay: 0.3,
-                  duration: 1,
-                  ease: "easeInOut",
-                }}
-              >
-                BLIPAIR
-              </MotionHeading>
-              <MotionText
-                fontSize="sm"
-                maxW="2xl"
-                opacity={0.8}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 1, duration: 0.3 }}
-              >
-                Send files directly between devices with matte-black glass panels, moving gradients, and end-to-end
-                encryption—works anywhere with automatic connectivity assistance.
-              </MotionText>
-              <Box position="relative" zIndex="1">
-                <MotionButton
-                  size="lg"
-                  leftIcon={<FileUp />}
-                  variant="startSharing"
-                  onClick={() => navigate("/transfer")}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.35, duration: 0.3 }}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  style={{ pointerEvents: "auto" }}
-                >
-                  Start Sharing
-                </MotionButton>
-              </Box>
-            </VStack>
-          </MotionBox>
-        </GlassCard>
-
-        {/* FEATURES */}
-        <GlassCard w="full" p={10}>
-          <MotionBox
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.5, duration: 0.4 }}
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex flex-col items-center justify-center min-h-[80vh] text-center">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          className="max-w-3xl"
+        >
+          <motion.h1
+            className={`text-4xl md:text-6xl font-display font-medium tracking-tight mb-6 ${
+              isDark ? "text-white/90" : "text-black/90"
+            }`}
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
           >
-            <SimpleGrid columns={{ base: 1, md: 3 }} spacing={8}>
-              {features.map((f, i) => (
-                <MotionBox
-                  key={i}
-                  textAlign="center"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 + i * 0.15, duration: 0.3 }}
-                  whileHover={{ y: -6, boxShadow: "2xl" }}
-                >
-                  <VStack spacing={4}>
-                    <Icon as={f.icon} boxSize={10} color="brand.600" />
-                    <Heading size="md">{f.title}</Heading>
-                    <Text>{f.description}</Text>
-                  </VStack>
-                </MotionBox>
-              ))}
-            </SimpleGrid>
-          </MotionBox>
-        </GlassCard>
+            BlipAir:{" "}
+            <span className="bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+              Just You and Your Files.
+            </span>
+          </motion.h1>
 
-        {/* CTA */}
-        <GlassCard w="full" p={10}>
-          <MotionBox
-            position={"absolute" as any}
-            bottom={0}
-            left="50%"
-            height="100%"
-            width="100%"
-            bgGradient={accentGradient}
-            opacity={0.1}
-            borderRadius="3xl"
-            filter="blur(80px)"
-            transform="translate(-50%, 20%)"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.12 }}
-            transition={{ delay: 0.3, duration: 0.7 }}
-          />
-
-          <MotionBox
-            position="relative"
-            p={8}
-            borderRadius="2xl"
+          <motion.p
+            className={`text-xl mb-8 ${isDark ? "text-white/60" : "text-black/60"}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.7, duration: 0.5 }}
+            transition={{ duration: 0.7, delay: 0.2 }}
           >
-            <VStack spacing={4} textAlign="center">
-              <MotionButton
-                size="lg"
-                variant="qrGlass"
-                leftIcon={<QrCode />}
-                onClick={openQrCodeModal}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                Show My QR Code
-              </MotionButton>
-            </VStack>
-          </MotionBox>
-        </GlassCard>
-      </VStack>
-    </Container>
+            Send files between devices on the same Wi-Fi—secure, fast, and cloud-free.
+          </motion.p>
+
+          <motion.div
+            className="flex flex-col sm:flex-row gap-4 justify-center"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+          >
+            <Button onClick={() => navigate("/transfer")} size="lg" className="rounded-full px-8">
+              Start Sharing
+            </Button>
+
+            <Button onClick={openQrCodeModal} variant="outline" size="lg" className="rounded-full px-8">
+              Share QR Code
+            </Button>
+          </motion.div>
+        </motion.div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-20 max-w-5xl">
+          {features.map((feature, index) => (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.4 + index * 0.1, ease: [0.22, 1, 0.36, 1] }}
+              className="flex flex-col items-center text-center"
+            >
+              <div className={`mb-4 ${isDark ? "text-white/80" : "text-black/90"}`}>{feature.icon}</div>
+              <h3 className={`text-xl font-medium mb-2 ${isDark ? "text-white/90" : "text-black/90"}`}>
+                {feature.title}
+              </h3>
+              <p className={isDark ? "text-white/50" : "text-black/50"}>{feature.description}</p>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }
 
