@@ -31,7 +31,7 @@ BlipAir is a modern web application that enables direct peer-to-peer file transf
 
 - **Direct Peer-to-Peer Transfers**: Send files directly to other devices without server intermediaries
 - **No Size Limits**: Transfer files of any size, limited only by your device's memory
-- **Cross-Platform Compatibility**: Works on desktop and mobile browsers, including iOS Safari
+- **Cross-Platform Compatibility**: Works on desktop and mobile browsers (except safari on iOS for now)
 - **Automatic Peer Discovery**: Easily find other devices on the same network
 - **Robust Transfer Management**:
   - Pause and resume transfers
