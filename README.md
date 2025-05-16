@@ -54,7 +54,7 @@ BlipAir uses a combination of modern web technologies to enable seamless file tr
 4. **File System Access API** (where available) for improved file saving
 
 <div align="center">
-  <img src="screenshots/peer-discovery.png" alt="Peer Discovery" width="80%" />
+  <img width="1512" alt="Image" src="https://github.com/user-attachments/assets/46eac4d4-ca27-4d70-a775-1835f0b0a2f5" />
 </div>
 
 ### Technical Architecture
@@ -78,7 +78,7 @@ The signaling server only facilitates the initial connection between peers. Once
 6. **Download completed files** when transfers finish
 
 <div align="center">
-  <img src="screenshots/file-selection.png" alt="File Selection" width="80%" />
+  <img width="1512" alt="Image" src="https://github.com/user-attachments/assets/2dab14c6-99b0-4e59-8115-6c8860354109" />
 </div>
 
 ### Tips for Best Performance
