@@ -23,8 +23,9 @@
 
 BlipAir is a modern web application that enables direct peer-to-peer file transfers between devices without uploading files to a server. Using WebRTC technology, BlipAir creates secure, encrypted connections directly between browsers, allowing for fast and private file sharing.
 
-
+<div align="center">
   <img width="1512" alt="Image" src="https://github.com/user-attachments/assets/abb9ce33-edde-4006-84f3-8547e4539ac7" />
+</div>
 
 
 ## Features
@@ -66,7 +67,7 @@ BlipAir consists of two main components:
 
 The signaling server only facilitates the initial connection between peers. Once connected, all file transfers occur directly between browsers without passing through any server.
 
-div align="center">
+<div align="center">
   <img width="1512" alt="Image" src="https://github.com/user-attachments/assets/739ade51-1701-460c-b862-1c62ce9860f4" />
 </div>
 
