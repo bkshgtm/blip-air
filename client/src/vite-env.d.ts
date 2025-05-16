@@ -1,6 +1,13 @@
 interface ImportMetaEnv {
   readonly VITE_SERVER_URL?: string
   readonly VITE_WS_URL?: string
+  readonly VITE_STUN_URL?: string
+  readonly VITE_TURN_URL_1?: string
+  readonly VITE_TURN_URL_2?: string
+  readonly VITE_TURN_URL_3?: string
+  readonly VITE_TURN_URL_4?: string
+  readonly VITE_TURN_USERNAME?: string
+  readonly VITE_TURN_CREDENTIAL?: string
   readonly MODE: "development" | "production" | "test"
 }
 

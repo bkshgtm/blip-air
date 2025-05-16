@@ -1,7 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Send, User } from "lucide-react"
+import { Send, User, Wifi, WifiOff, AlertTriangle, Info } from "lucide-react"
 import { useSocketStore } from "../store/socketStore"
 import { useWebRTCStore } from "../store/webrtcStore"
 import { useToast } from "@/hooks/use-toast"
@@ -11,12 +11,13 @@ import { Avatar, AvatarFallback } from "./ui/avatar"
 import { Badge } from "./ui/badge"
 import { ScrollArea } from "./ui/scroll-area"
 import { Separator } from "./ui/separator"
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
 import { useState, useEffect } from "react"
 import { useTheme } from "./theme-provider"
 
 const PeerList = () => {
   const { toast } = useToast()
-  const { peers } = useSocketStore()
+  const { peers, networkInfo } = useSocketStore()
   const { selectedFiles, createPeerConnection, sendFiles } = useWebRTCStore()
   const [connecting, setConnecting] = useState<string | null>(null)
   const [hasFiles, setHasFiles] = useState<boolean>(false)
@@ -59,10 +60,46 @@ const PeerList = () => {
   return (
     <Card className={`${isDark ? "glass-card" : "glass-card-light"} h-full`}>
       <CardHeader className="pb-2">
-        <CardTitle className={`text-base sm:text-lg ${isDark ? "text-white/90" : "text-black/90"} font-medium`}>
-          Available Peers
-          {hasFiles && <span className="ml-2 text-xs text-green-500">({selectedFiles.length} files ready)</span>}
-        </CardTitle>
+        <div className="flex justify-between items-center">
+          <CardTitle className={`text-base sm:text-lg ${isDark ? "text-white/90" : "text-black/90"} font-medium`}>
+            Available Peers
+            {hasFiles && <span className="ml-2 text-xs text-green-500">({selectedFiles.length} files ready)</span>}
+          </CardTitle>
+
+          {networkInfo && (
+            <div className="flex items-center">
+              {networkInfo.isPrivateNetwork ? (
+                <Wifi className="h-4 w-4 text-green-500 mr-1" />
+              ) : (
+                <WifiOff className="h-4 w-4 text-yellow-500 mr-1" />
+              )}
+              <span className={`text-xs ${isDark ? "text-white/60" : "text-black/60"}`}>
+                {networkInfo.peerCount} peers
+              </span>
+            </div>
+          )}
+        </div>
+
+        {networkInfo && !networkInfo.isPrivateNetwork && (
+          <Alert className="mt-2 py-2 border-yellow-500/50 bg-yellow-500/10" variant="default">
+            <AlertTriangle className="h-4 w-4 text-yellow-500" />
+            <AlertTitle className="text-xs font-medium text-yellow-500">Not on a private network</AlertTitle>
+            <AlertDescription className="text-xs text-yellow-500/90">
+              You appear to be on a public network. Peer discovery works best on private WiFi networks.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {networkInfo && networkInfo.isPrivateNetwork && peers.length === 0 && (
+          <Alert className="mt-2 py-2 border-blue-500/50 bg-blue-500/10" variant="default">
+            <Info className="h-4 w-4 text-blue-500" />
+            <AlertTitle className="text-xs font-medium text-blue-500">No peers found</AlertTitle>
+            <AlertDescription className="text-xs text-blue-500/90">
+              You're on a private network ({networkInfo.subnet}), but no peers were found. Make sure other devices are
+              on the same WiFi.
+            </AlertDescription>
+          </Alert>
+        )}
       </CardHeader>
       <Separator className={isDark ? "bg-white/5" : "bg-black/5"} />
       <CardContent className="pt-4 h-[calc(100%-60px)]">

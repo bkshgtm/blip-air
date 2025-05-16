@@ -74,28 +74,23 @@ interface WebRTCState {
 const DEFAULT_PC_CONFIG: RTCConfiguration = {
   iceServers: [
     {
-      urls: [
-        "stun:stun.l.google.com:19302",
-        "stun:stun1.l.google.com:19302",
-        "stun:stun2.l.google.com:19302",
-        "stun:stun3.l.google.com:19302",
-      ],
+      urls: [import.meta.env.VITE_STUN_URL || "stun:stun.l.google.com:19302"],
     },
 
     {
       urls: [
-        "turn:openrelay.metered.ca:80",
-        "turn:openrelay.metered.ca:443",
-        "turn:openrelay.metered.ca:443?transport=tcp",
+        import.meta.env.VITE_TURN_URL_1 || "turn:openrelay.metered.ca:80",
+        import.meta.env.VITE_TURN_URL_2 || "turn:openrelay.metered.ca:443",
+        import.meta.env.VITE_TURN_URL_3 || "turn:openrelay.metered.ca:443?transport=tcp",
       ],
-      username: "openrelayproject",
-      credential: "openrelayproject",
+      username: import.meta.env.VITE_TURN_USERNAME || "openrelayproject",
+      credential: import.meta.env.VITE_TURN_CREDENTIAL || "openrelayproject",
     },
 
     {
-      urls: "turns:openrelay.metered.ca:443?transport=tcp",
-      username: "openrelayproject",
-      credential: "openrelayproject",
+      urls: import.meta.env.VITE_TURN_URL_4 || "turns:openrelay.metered.ca:443?transport=tcp",
+      username: import.meta.env.VITE_TURN_USERNAME || "openrelayproject",
+      credential: import.meta.env.VITE_TURN_CREDENTIAL || "openrelayproject",
     },
   ],
   iceTransportPolicy: "all" as RTCIceTransportPolicy,
@@ -1641,14 +1636,20 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
     const relayConfig: RTCConfiguration = {
       iceServers: [
         {
-          urls: ["turn:openrelay.metered.ca:80", "turn:openrelay.metered.ca:443"],
-          username: "openrelayproject",
-          credential: "openrelayproject",
+          urls: [
+            import.meta.env.VITE_TURN_URL_1 || "turn:openrelay.metered.ca:80",
+            import.meta.env.VITE_TURN_URL_3 || "turn:openrelay.metered.ca:443",
+          ],
+          username: import.meta.env.VITE_TURN_USERNAME || "openrelayproject",
+          credential: import.meta.env.VITE_TURN_CREDENTIAL || "openrelayproject",
         },
         {
-          urls: ["turn:openrelay.metered.ca:443?transport=tcp", "turns:openrelay.metered.ca:443?transport=tcp"],
-          username: "openrelayproject",
-          credential: "openrelayproject",
+          urls: [
+            import.meta.env.VITE_TURN_URL_2 || "turn:openrelay.metered.ca:443?transport=tcp",
+            import.meta.env.VITE_TURN_URL_4 || "turns:openrelay.metered.ca:443?transport=tcp",
+          ],
+          username: import.meta.env.VITE_TURN_USERNAME || "openrelayproject",
+          credential: import.meta.env.VITE_TURN_CREDENTIAL || "openrelayproject",
         },
       ],
       iceTransportPolicy: "relay" as RTCIceTransportPolicy,

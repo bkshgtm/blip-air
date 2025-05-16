@@ -5,6 +5,7 @@ import App from "./App"
 import "./index.css"
 import { ThemeProvider } from "./components/theme-provider"
 import { Toaster } from "./components/ui/sonner"
+import "./test-stun-turn.js"
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
