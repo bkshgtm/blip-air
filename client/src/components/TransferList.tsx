@@ -202,8 +202,26 @@ const TransferList = () => {
                             <motion.div
                               className="progress-bar-fill"
                               initial={{ width: 0 }}
-                              animate={{ width: `${transfer.progress * 100}%` }}
-                              transition={{ duration: 0.3 }}
+                              animate={{
+                                width:
+                                  transfer.status === "completed"
+                                    ? "100%"
+                                    : `${Math.max(0, Math.min(100, transfer.progress * 100))}%`,
+                              }}
+                              transition={{
+                                duration: transfer.status === "completed" ? 0.5 : 0.3,
+                                ease: transfer.status === "completed" ? "easeOut" : "linear",
+                              }}
+                              style={{
+                                backgroundColor:
+                                  transfer.status === "completed"
+                                    ? "rgba(34, 197, 94, 0.8)"
+                                    : transfer.status === "paused"
+                                    ? "rgba(234, 179, 8, 0.8)"
+                                    : transfer.status === "error"
+                                    ? "rgba(239, 68, 68, 0.8)"
+                                    : undefined,
+                              }}
                             />
                           </div>
 

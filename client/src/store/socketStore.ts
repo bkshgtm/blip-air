@@ -12,25 +12,46 @@ function logNetworkDiagnostics(message: string, data?: any) {
   }
 }
 
-// Device detection for special handling
+// Device detection for special handling - more aggressive approach
 const isIOSSafari = () => {
   const ua = navigator.userAgent
-  // iOS detection without using MSStream
-  const isIOS = /iPad|iPhone|iPod/.test(ua) && !/Windows Phone/.test(ua)
+  // More aggressive iOS detection
+  const isIOS = /iPad|iPhone|iPod/.test(ua)
+  // More permissive Safari detection
   const isSafari = /Safari/.test(ua) && !/Chrome/.test(ua)
-  return isIOS && isSafari
+  const isIOSSafari = isIOS && isSafari
+
+  console.log(`[SocketStore] iOS Safari detection:`, {
+    userAgent: ua,
+    isIOS,
+    isSafari,
+    isIOSSafari,
+  })
+
+  return isIOSSafari
 }
 
+// General Safari detection
 const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
 
+// Check URL for force flags (for testing)
+const urlParams = new URLSearchParams(window.location.search)
+const forceIOSSafari = urlParams.get("force-ios-safari") === "true"
+
+// Create device info with more details
 const deviceInfo = {
-  isIOSSafari: isIOSSafari(),
-  isSafari: isSafari,
-  isMobile: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent),
+  isIOSSafari: forceIOSSafari || isIOSSafari(),
+  isSafari: forceIOSSafari || isSafari,
+  isMobile: forceIOSSafari || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent),
   userAgent: navigator.userAgent,
+  forceIOSSafari: forceIOSSafari,
 }
 
+// Log device detection details
 console.log(`[SocketStore] Device detection:`, deviceInfo)
+if (forceIOSSafari) {
+  console.log(`[SocketStore] ⚠️ iOS Safari mode FORCED via URL parameter`)
+}
 
 const BASE_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3001"
 const SERVER_URL = BASE_URL.replace(/^http/, "ws").replace(/^https/, "wss")

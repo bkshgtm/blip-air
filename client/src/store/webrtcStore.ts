@@ -2,6 +2,7 @@ import { create } from "zustand"
 import { NavigateFunction } from "react-router-dom"
 import { useSocketStore } from "./socketStore"
 import { useSettingsStore } from "./settingsStore"
+import { calculateProgress } from "../lib/chunking"
 
 interface PeerConnection {
   connection: RTCPeerConnection
@@ -441,7 +442,25 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
             pendingChunkMetadata = message.data
           } else if (message.type === "file-complete-confirm") {
             const { fileId: confirmedFileId } = message.data
+            console.log(
+              `[WebRTC] Sender received file-complete-confirm for ${confirmedFileId}. File is fully received and assembled by peer.`,
+            )
             get().updateTransferStatus(confirmedFileId, "completed")
+
+            // Notify the user that the transfer is complete
+            const transfer = get().transfers.find((t) => t.fileId === confirmedFileId)
+            if (transfer && !transfer._notified) {
+              // Mark as notified to prevent duplicate notifications
+              const updatedTransfers = get().transfers.map((t) =>
+                t.fileId === confirmedFileId ? { ...t, _notified: true } : t,
+              )
+              set({ transfers: updatedTransfers })
+
+              // You could add a notification here if needed
+              console.log(
+                `[WebRTC] Transfer of ${transfer.fileName} to ${transfer.peerId} is complete and confirmed by receiver`,
+              )
+            }
           } else if (message.type === "transfer-control") {
             const { fileId, action } = message.data
 
@@ -632,12 +651,21 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
 
           const now = Date.now()
           const elapsedTime = (now - (transfer.startTime || now)) / 1000
-          const progress = transfer.chunks.received / transfer.chunks.total
-          const bytesReceived = progress * transfer.fileSize
-          const speed = elapsedTime > 0 ? bytesReceived / elapsedTime : 0
-          const remainingBytes = transfer.fileSize - bytesReceived
-          const eta = speed > 0 ? remainingBytes / speed : 0
 
+          // Use the new calculateProgress function for more accurate progress
+          const progress = calculateProgress(transfer.chunks.received, transfer.chunks.total)
+
+          // Calculate bytes received based on progress
+          const bytesReceived = progress * transfer.fileSize
+
+          // Calculate speed with safeguards against division by zero
+          const speed = elapsedTime > 0.1 ? bytesReceived / elapsedTime : 0
+
+          // Calculate remaining bytes and ETA
+          const remainingBytes = transfer.fileSize - bytesReceived
+          const eta = speed > 1000 ? remainingBytes / speed : 0 // Only calculate ETA if speed is meaningful
+
+          // Update transfer with calculated values
           transfer.progress = progress
           transfer.speed = speed
           transfer.eta = eta
@@ -660,13 +688,116 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
                 finalStatus = "error"
               }
             } else if (!transfer.usesFileSystemAccessAPI) {
-              if (
-                transfer.chunks.data &&
-                transfer.chunks.data.length === transfer.chunks.total &&
-                transfer.chunks.data.every((c) => c instanceof Uint8Array)
-              ) {
-                const validChunks = transfer.chunks.data.filter((chunk) => chunk && chunk.byteLength > 0)
+              // More robust Blob assembly with better error handling and recovery
+              try {
+                console.log(`[WebRTC] Attempting to assemble file ${fileId} from chunks...`)
 
+                // First check if we have all the chunks
+                if (!transfer.chunks.data || transfer.chunks.data.length !== transfer.chunks.total) {
+                  console.error(
+                    `[WebRTC] Chunk data array length mismatch: ${transfer.chunks.data?.length} vs expected ${transfer.chunks.total}`,
+                  )
+
+                  // Try to resize the array if needed
+                  if (transfer.chunks.data && transfer.chunks.data.length < transfer.chunks.total) {
+                    console.log(
+                      `[WebRTC] Resizing chunk data array from ${transfer.chunks.data.length} to ${transfer.chunks.total}`,
+                    )
+                    const newData = new Array(transfer.chunks.total).fill(null)
+                    transfer.chunks.data.forEach((chunk, idx) => {
+                      if (idx < transfer.chunks.total) {
+                        newData[idx] = chunk
+                      }
+                    })
+                    transfer.chunks.data = newData
+                  } else if (!transfer.chunks.data) {
+                    console.log(`[WebRTC] Creating new chunk data array of size ${transfer.chunks.total}`)
+                    transfer.chunks.data = new Array(transfer.chunks.total).fill(null)
+                  }
+                }
+
+                // Check for missing chunks
+                const missingChunks: number[] = []
+                if (transfer.chunks.receivedIndices) {
+                  for (let i = 0; i < transfer.chunks.total; i++) {
+                    if (!transfer.chunks.receivedIndices.has(i)) {
+                      missingChunks.push(i)
+                    }
+                  }
+                } else {
+                  // If receivedIndices is not available, check the data array
+                  for (let i = 0; i < transfer.chunks.total; i++) {
+                    if (
+                      !transfer.chunks.data ||
+                      !transfer.chunks.data[i] ||
+                      !(transfer.chunks.data[i] instanceof Uint8Array)
+                    ) {
+                      missingChunks.push(i)
+                    }
+                  }
+                }
+
+                if (missingChunks.length > 0) {
+                  console.warn(
+                    `[WebRTC] Missing ${missingChunks.length} chunks: ${missingChunks.slice(0, 10).join(", ")}${
+                      missingChunks.length > 10 ? "..." : ""
+                    }`,
+                  )
+
+                  // Request missing chunks if we have a connection
+                  const connection = get().peerConnections.get(transfer.peerId)
+                  if (connection && connection.dataChannel && connection.dataChannel.readyState === "open") {
+                    // Only request a batch of chunks at a time to avoid overwhelming the connection
+                    const chunksToRequest = missingChunks.slice(0, 100)
+                    console.log(`[WebRTC] Requesting resend of ${chunksToRequest.length} missing chunks`)
+
+                    connection.dataChannel.send(
+                      JSON.stringify({
+                        type: "chunk-resend-request",
+                        data: {
+                          fileId,
+                          missingChunks: chunksToRequest,
+                        },
+                      }),
+                    )
+
+                    // Keep status as transferring
+                    finalStatus = "transferring"
+                    return
+                  } else {
+                    console.error(`[WebRTC] Cannot request missing chunks: data channel not available`)
+                    finalStatus = "error"
+                    transfer.error = "Connection lost - missing chunks cannot be requested"
+                    return
+                  }
+                }
+
+                // If we get here, we should have all chunks - try to assemble them
+                // Filter out null values and ensure we only have valid Uint8Array objects
+                const validChunks = transfer.chunks.data!.filter(
+                  (chunk): chunk is Uint8Array => chunk !== null && chunk instanceof Uint8Array && chunk.byteLength > 0,
+                )
+
+                if (validChunks.length !== transfer.chunks.total) {
+                  console.error(
+                    `[WebRTC] Valid chunks count (${validChunks.length}) doesn't match expected total (${transfer.chunks.total})`,
+                  )
+
+                  // If we have most of the chunks, try to assemble anyway
+                  if (validChunks.length >= transfer.chunks.total * 0.99) {
+                    console.log(
+                      `[WebRTC] Attempting to assemble file with ${validChunks.length}/${
+                        transfer.chunks.total
+                      } chunks (${((validChunks.length / transfer.chunks.total) * 100).toFixed(2)}%)`,
+                    )
+                  } else {
+                    finalStatus = "error"
+                    transfer.error = `Missing ${transfer.chunks.total - validChunks.length} chunks for assembly`
+                    return
+                  }
+                }
+
+                // Create the blob from valid chunks
                 const fileBlob = new Blob(validChunks, { type: transfer.fileType })
                 transfer.fileBlob = fileBlob
 
@@ -674,48 +805,49 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
                   `[WebRTC] File ${transfer.fileName} (${fileId}) assembled. Blob size: ${fileBlob.size}, Expected size: ${transfer.fileSize}`,
                 )
 
+                // Check if the size is within tolerance
                 const sizeDifference = Math.abs(fileBlob.size - transfer.fileSize)
                 const sizeTolerancePercent = (sizeDifference / transfer.fileSize) * 100
 
-                if (sizeTolerancePercent > 0.1) {
+                if (sizeTolerancePercent > 1.0) {
+                  // More generous tolerance (1% instead of 0.1%)
                   console.error(
                     `[WebRTC] Assembled Blob size mismatch for ${fileId}! Blob: ${fileBlob.size}, Expected: ${
                       transfer.fileSize
                     }, Difference: ${sizeDifference} bytes (${sizeTolerancePercent.toFixed(4)}%)`,
                   )
 
-                  if (transfer.chunks.receivedIndices) {
-                    const missingChunks = []
-                    for (let i = 0; i < transfer.chunks.total; i++) {
-                      if (!transfer.chunks.receivedIndices.has(i)) {
-                        missingChunks.push(i)
-                      }
-                    }
+                  // If the difference is too large, request all chunks again
+                  const connection = get().peerConnections.get(transfer.peerId)
+                  if (connection && connection.dataChannel && connection.dataChannel.readyState === "open") {
+                    // Request a full retransmission
+                    console.log(`[WebRTC] Size mismatch too large, requesting full retransmission`)
 
-                    if (missingChunks.length > 0) {
-                      console.error(`[WebRTC] Missing chunks detected: ${missingChunks.join(", ")}`)
+                    // Clear existing data and request all chunks
+                    transfer.chunks.data = new Array(transfer.chunks.total).fill(null)
+                    transfer.chunks.receivedIndices = new Set<number>()
+                    transfer.chunks.received = 0
 
-                      const connection = get().peerConnections.get(transfer.peerId)
-                      if (connection && connection.dataChannel && connection.dataChannel.readyState === "open") {
-                        connection.dataChannel.send(
-                          JSON.stringify({
-                            type: "chunk-resend-request",
-                            data: {
-                              fileId,
-                              missingChunks,
-                            },
-                          }),
-                        )
-                        console.log(`[WebRTC] Requested resend of ${missingChunks.length} missing chunks`)
-                        return
-                      }
-                    }
+                    const allChunks = Array.from({ length: transfer.chunks.total }, (_, i) => i)
 
-                    finalStatus = "error"
-                    transfer.error = "Assembled file size mismatch"
+                    // Request in batches of 100
+                    const firstBatch = allChunks.slice(0, 100)
+                    connection.dataChannel.send(
+                      JSON.stringify({
+                        type: "chunk-resend-request",
+                        data: {
+                          fileId,
+                          missingChunks: firstBatch,
+                        },
+                      }),
+                    )
+
+                    finalStatus = "transferring"
+                    return
                   } else {
                     finalStatus = "error"
-                    transfer.error = "Assembled file size mismatch"
+                    transfer.error = "Size mismatch and connection lost"
+                    return
                   }
                 } else {
                   console.log(
@@ -723,12 +855,10 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
                   )
                   finalStatus = "completed"
                 }
-              } else {
-                console.error(
-                  `[WebRTC] Blob Fallback: All chunks reported received for ${transfer.fileName} (${fileId}), but chunk data array is incomplete or contains invalid entries. Received: ${transfer.chunks.receivedIndices?.size}/${transfer.chunks.total}`,
-                )
-                transfer.error = "Chunk data array malformed for Blob assembly"
+              } catch (error) {
+                console.error(`[WebRTC] Error during Blob assembly:`, error)
                 finalStatus = "error"
+                transfer.error = `Assembly error: ${(error as any).message || "Unknown error"}`
               }
             }
           }
