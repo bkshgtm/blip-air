@@ -71,30 +71,25 @@ interface WebRTCState {
   retryConnectionWithRelay: (peerId: string) => Promise<void>
 }
 
+// Optimized configuration with fewer STUN/TURN servers for faster discovery
 const DEFAULT_PC_CONFIG: RTCConfiguration = {
   iceServers: [
     {
+      // Keep the STUN server for NAT traversal
       urls: [import.meta.env.VITE_STUN_URL || "stun:stun.l.google.com:19302"],
     },
-
     {
+      // Use only two TURN servers - one for UDP and one for TCP fallback
       urls: [
-        import.meta.env.VITE_TURN_URL_1 || "turn:openrelay.metered.ca:80",
-        import.meta.env.VITE_TURN_URL_2 || "turn:openrelay.metered.ca:443",
-        import.meta.env.VITE_TURN_URL_3 || "turn:openrelay.metered.ca:443?transport=tcp",
+        import.meta.env.VITE_TURN_URL_1 || "turn:standard.relay.metered.ca:80", // UDP
+        import.meta.env.VITE_TURN_URL_2 || "turn:standard.relay.metered.ca:80?transport=tcp", // TCP fallback
       ],
-      username: import.meta.env.VITE_TURN_USERNAME || "openrelayproject",
-      credential: import.meta.env.VITE_TURN_CREDENTIAL || "openrelayproject",
-    },
-
-    {
-      urls: import.meta.env.VITE_TURN_URL_4 || "turns:openrelay.metered.ca:443?transport=tcp",
       username: import.meta.env.VITE_TURN_USERNAME || "openrelayproject",
       credential: import.meta.env.VITE_TURN_CREDENTIAL || "openrelayproject",
     },
   ],
   iceTransportPolicy: "all" as RTCIceTransportPolicy,
-  iceCandidatePoolSize: 10,
+  iceCandidatePoolSize: 5, // Reduced from 10 to 5 for faster gathering
 }
 
 export const useWebRTCStore = create<WebRTCState>((set, get) => ({
@@ -1636,24 +1631,17 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
     const relayConfig: RTCConfiguration = {
       iceServers: [
         {
+          // For relay-only mode, we use just one TURN server with both UDP and TCP options
           urls: [
-            import.meta.env.VITE_TURN_URL_1 || "turn:openrelay.metered.ca:80",
-            import.meta.env.VITE_TURN_URL_3 || "turn:openrelay.metered.ca:443",
-          ],
-          username: import.meta.env.VITE_TURN_USERNAME || "openrelayproject",
-          credential: import.meta.env.VITE_TURN_CREDENTIAL || "openrelayproject",
-        },
-        {
-          urls: [
-            import.meta.env.VITE_TURN_URL_2 || "turn:openrelay.metered.ca:443?transport=tcp",
-            import.meta.env.VITE_TURN_URL_4 || "turns:openrelay.metered.ca:443?transport=tcp",
+            import.meta.env.VITE_TURN_URL_1 || "turn:standard.relay.metered.ca:80", // UDP
+            import.meta.env.VITE_TURN_URL_2 || "turn:standard.relay.metered.ca:80?transport=tcp", // TCP fallback
           ],
           username: import.meta.env.VITE_TURN_USERNAME || "openrelayproject",
           credential: import.meta.env.VITE_TURN_CREDENTIAL || "openrelayproject",
         },
       ],
       iceTransportPolicy: "relay" as RTCIceTransportPolicy,
-      iceCandidatePoolSize: 5,
+      iceCandidatePoolSize: 3, // Even smaller pool for relay-only mode
     }
 
     console.log(`[WebRTC] Creating new RTCPeerConnection for peer ${peerId} with relay-only config`)
