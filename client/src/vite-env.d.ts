@@ -11,7 +11,6 @@ interface ImportMetaEnv {
   readonly MODE: "development" | "production" | "test"
 }
 
-// Declare the test-stun-turn.js module to fix TypeScript error
 declare module "./test-stun-turn.js" {
   export default {}
 }

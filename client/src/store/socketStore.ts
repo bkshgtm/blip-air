@@ -3,7 +3,6 @@ import { io, type Socket } from "socket.io-client"
 import { useWebRTCStore } from "./webrtcStore"
 import { useSettingsStore } from "./settingsStore"
 
-// Enhanced logging for network diagnostics
 const VERBOSE_LOGGING = true
 
 function logNetworkDiagnostics(message: string, data?: any) {
@@ -12,12 +11,11 @@ function logNetworkDiagnostics(message: string, data?: any) {
   }
 }
 
-// Device detection for special handling - more aggressive approach
 const isIOSSafari = () => {
   const ua = navigator.userAgent
-  // More aggressive iOS detection
+
   const isIOS = /iPad|iPhone|iPod/.test(ua)
-  // More permissive Safari detection
+
   const isSafari = /Safari/.test(ua) && !/Chrome/.test(ua)
   const isIOSSafari = isIOS && isSafari
 
@@ -31,14 +29,11 @@ const isIOSSafari = () => {
   return isIOSSafari
 }
 
-// General Safari detection
 const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
 
-// Check URL for force flags (for testing)
 const urlParams = new URLSearchParams(window.location.search)
 const forceIOSSafari = urlParams.get("force-ios-safari") === "true"
 
-// Create device info with more details
 const deviceInfo = {
   isIOSSafari: forceIOSSafari || isIOSSafari(),
   isSafari: forceIOSSafari || isSafari,
@@ -47,7 +42,6 @@ const deviceInfo = {
   forceIOSSafari: forceIOSSafari,
 }
 
-// Log device detection details
 console.log(`[SocketStore] Device detection:`, deviceInfo)
 if (forceIOSSafari) {
   console.log(`[SocketStore] ⚠️ iOS Safari mode FORCED via URL parameter`)
@@ -61,14 +55,13 @@ logNetworkDiagnostics("Environment configuration", {
   baseUrl: BASE_URL,
   serverUrl: SERVER_URL,
   viteEnv: import.meta.env.MODE,
-  // Use MODE to determine development vs production
+
   isDevelopment: import.meta.env.MODE === "development",
   isProduction: import.meta.env.MODE === "production",
 })
 
 const CONNECTION_TIMEOUT = 10000
 
-// Flag to determine if we're running in development or production
 const IS_DEV =
   window.location.hostname === "localhost" ||
   window.location.hostname === "127.0.0.1" ||
@@ -80,17 +73,17 @@ console.log(`[SocketStore] Running in ${IS_DEV ? "development" : "production"} m
 interface PeerInfo {
   id: string
   name: string
-  subnet?: string // Subnet information from server
-  isPrivateNetwork?: boolean // Whether the peer is on a private network
-  connectionTime?: number // When the peer connected
+  subnet?: string
+  isPrivateNetwork?: boolean
+  connectionTime?: number
 }
 
 interface NetworkInfo {
-  isPrivateNetwork?: boolean // Whether the client is on a private network (for backward compatibility)
-  subnet?: string // The subnet the client is on (for backward compatibility)
-  networkId?: string // Network identifier (from new implementation)
-  peerCount: number // Number of peers on the same network
-  totalOnlineUsers: number // Total number of users online
+  isPrivateNetwork?: boolean
+  subnet?: string
+  networkId?: string
+  peerCount: number
+  totalOnlineUsers: number
 }
 
 interface SocketState {
@@ -98,8 +91,8 @@ interface SocketState {
   isConnected: boolean
   sessionId: string | null
   peers: PeerInfo[]
-  networkInfo: NetworkInfo | null // Network information from server
-  localNetworkOnly: boolean // Flag to filter peers by local network (kept for API compatibility)
+  networkInfo: NetworkInfo | null
+  localNetworkOnly: boolean
   initSocket: () => void
   disconnectSocket: () => void
   setSessionId: (id: string) => void
@@ -113,7 +106,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   sessionId: null,
   peers: [],
   networkInfo: null,
-  localNetworkOnly: true, // Default to local network only (kept for API compatibility)
+  localNetworkOnly: true,
 
   initSocket: () => {
     const { sessionName } = useSettingsStore.getState()
@@ -145,7 +138,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       console.log("✅ Connected to signaling server")
       set({ isConnected: true })
 
-      // Log detailed connection information
       logNetworkDiagnostics("Socket connected", {
         socketId: newSocket.id,
         transport: newSocket.io.engine.transport.name,
@@ -154,9 +146,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         userAgent: navigator.userAgent,
       })
 
-      // Log network interfaces if available
       try {
-        // Network Information API might not be available in all browsers
         // @ts-ignore - Using optional chaining to safely access
         const connection = navigator?.connection
         if (connection) {
@@ -173,11 +163,9 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         logNetworkDiagnostics("Error accessing network information", { error })
       }
 
-      // Send device info to server for special handling
       console.log("[SocketStore] Sending device info to server:", deviceInfo)
       newSocket.emit("device-info", deviceInfo)
 
-      // Set up Safari-specific ping to keep connection alive
       if (deviceInfo.isIOSSafari || deviceInfo.isSafari) {
         console.log("[SocketStore] Setting up Safari ping interval to keep connection alive")
         const pingInterval = setInterval(() => {
@@ -187,9 +175,8 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           } else {
             clearInterval(pingInterval)
           }
-        }, 30000) // Send ping every 30 seconds
+        }, 30000)
 
-        // Clear interval on disconnect
         newSocket.on("disconnect", () => {
           clearInterval(pingInterval)
         })
@@ -210,7 +197,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     })
 
     newSocket.on("disconnect", () => {
-      console.log("❌ Disconnected from signaling server")
+      console.log("Disconnected from signaling server")
       set({ isConnected: false })
     })
 
@@ -218,22 +205,19 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       console.log("Session data received:", sessionData)
       logNetworkDiagnostics("Session created", { sessionData })
 
-      // Handle both old format (string sessionId) and new format (object with id, isPrivateNetwork, subnet)
       if (typeof sessionData === "string") {
-        // Old format - just a session ID string
         console.log(`[SocketStore] Received session ID in old format (string)`)
         logNetworkDiagnostics("Session format", { type: "legacy-string" })
         set({
           sessionId: sessionData,
           networkInfo: {
-            isPrivateNetwork: IS_DEV, // Assume private network in dev mode
+            isPrivateNetwork: IS_DEV,
             subnet: "unknown",
             peerCount: 0,
-            totalOnlineUsers: 1, // Just this client for now
+            totalOnlineUsers: 1,
           },
         })
       } else if (sessionData && typeof sessionData === "object" && sessionData.id) {
-        // New format - object with id, isPrivateNetwork, networkId/subnet
         console.log(`[SocketStore] Received session data in new format (object)`)
         logNetworkDiagnostics("Session format", {
           type: "object",
@@ -242,13 +226,11 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           subnet: sessionData.subnet,
         })
 
-        // Create network info object with required fields
         const networkInfo: NetworkInfo = {
           peerCount: 0,
-          totalOnlineUsers: 1, // Just this client for now
+          totalOnlineUsers: 1,
         }
 
-        // Add optional fields if they exist
         if (sessionData.isPrivateNetwork !== undefined) {
           networkInfo.isPrivateNetwork = sessionData.isPrivateNetwork
         }
@@ -256,7 +238,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         if (sessionData.networkId !== undefined) {
           networkInfo.networkId = sessionData.networkId
         } else if (sessionData.subnet !== undefined) {
-          // Backward compatibility
           networkInfo.subnet = sessionData.subnet
         }
 
@@ -271,7 +252,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     })
 
     newSocket.on("peers-updated", (data: any) => {
-      // Handle both old format (array of peers) and new format (object with peers and networkInfo)
       let peerList: PeerInfo[] = []
       let networkInfo: NetworkInfo | null = null
 
@@ -281,19 +261,16 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       })
 
       if (Array.isArray(data)) {
-        // Old format - just an array of peers
         console.log(`[SocketStore] Received peers in old format (array)`)
         peerList = data
 
-        // Create default network info
         networkInfo = {
-          isPrivateNetwork: IS_DEV, // Assume private network in dev mode
+          isPrivateNetwork: IS_DEV,
           subnet: "unknown",
           peerCount: peerList.length,
-          totalOnlineUsers: peerList.length + 1, // +1 for this client
+          totalOnlineUsers: peerList.length + 1,
         }
       } else if (data && typeof data === "object") {
-        // New format - object with peers and networkInfo
         console.log(`[SocketStore] Received peers in new format (object with peers and networkInfo)`)
         peerList = data.peers || []
         networkInfo = data.networkInfo || null
@@ -306,7 +283,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       const currentId = newSocket.id
       const updated = peerList.map((peer) => (peer.id === currentId ? { ...peer, name: sessionName } : peer))
 
-      // Log peer and network information for debugging
       if (networkInfo) {
         console.log(`[SocketStore] Network info:`, networkInfo)
         logNetworkDiagnostics("Network information", networkInfo)
@@ -325,7 +301,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         console.log(`[SocketStore] No peers received from server`)
         logNetworkDiagnostics("No peers found", { groupId: networkInfo?.subnet })
 
-        // If on a private network but no peers, log a helpful message
         if (networkInfo && networkInfo.isPrivateNetwork) {
           console.log(
             `[SocketStore] You are on a private network (${networkInfo.subnet}) but no peers were found. Make sure other devices are on the same WiFi network.`,
@@ -335,7 +310,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         }
       }
 
-      // Update state with peers and network info
       set({
         peers: updated,
         networkInfo,
@@ -369,8 +343,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
   setPeers: (peers: PeerInfo[]) => set({ peers }),
 
-  // This function is kept for API compatibility but no longer needed
-  // since the server now handles filtering by subnet
   setLocalNetworkOnly: (value: boolean) => {
     set({ localNetworkOnly: value })
     console.log(`[SocketStore] Local network only mode ${value ? "enabled" : "disabled"} (handled by server)`)

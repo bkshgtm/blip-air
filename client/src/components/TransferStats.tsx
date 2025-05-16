@@ -10,36 +10,23 @@ const TransferStats = () => {
   const { transfers } = useWebRTCStore()
   const { theme } = useTheme()
   const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)
-
-  // Filter transfers by status
   const activeTransfers = transfers.filter((t) => t.status === "transferring" || t.status === "paused")
   const completedTransfers = transfers.filter((t) => t.status === "completed")
-  // We'll use this variable later for error reporting/statistics
-  // const erroredTransfers = transfers.filter((t) => t.status === "error")
-
-  // Calculate total size of all non-errored transfers
   const totalSize = transfers.filter((t) => t.status !== "error").reduce((acc, t) => acc + t.fileSize, 0)
-
-  // Calculate total bytes transferred (including completed files)
   const totalTransferred = transfers.reduce((acc, t) => {
     if (t.status === "completed") {
-      // Count completed transfers as fully transferred
       return acc + t.fileSize
     } else if (t.status === "error") {
-      // Don't count errored transfers
       return acc
     } else {
-      // For in-progress or paused transfers, use the progress percentage
       return acc + t.fileSize * t.progress
     }
   }, 0)
 
-  // Calculate average speed only from actively transferring files
   const transferringFiles = transfers.filter((t) => t.status === "transferring")
   const averageSpeed =
     transferringFiles.length > 0 ? transferringFiles.reduce((acc, t) => acc + t.speed, 0) / transferringFiles.length : 0
 
-  // Calculate overall progress
   const overallProgress = totalSize > 0 ? totalTransferred / totalSize : 0
 
   return (

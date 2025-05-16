@@ -1,10 +1,6 @@
-// Test script to verify STUN and TURN server configuration
-// Run this in the browser console when the app is running
-
 function testStunTurnConfig() {
   console.log("Testing STUN and TURN server configuration")
 
-  // Print environment variables (these will be undefined in the browser console)
   console.log("Environment variables:")
   console.log("VITE_STUN_URL:", import.meta.env.VITE_STUN_URL)
   console.log("VITE_TURN_URL_1:", import.meta.env.VITE_TURN_URL_1)
@@ -14,7 +10,6 @@ function testStunTurnConfig() {
   console.log("VITE_TURN_USERNAME:", import.meta.env.VITE_TURN_USERNAME)
   console.log("VITE_TURN_CREDENTIAL:", import.meta.env.VITE_TURN_CREDENTIAL)
 
-  // Create a test RTCPeerConnection with the same config as in webrtcStore.ts
   const config = {
     iceServers: [
       {
@@ -41,14 +36,12 @@ function testStunTurnConfig() {
 
   console.log("RTCPeerConnection config:", JSON.stringify(config, null, 2))
 
-  // Create a test peer connection
   const pc = new RTCPeerConnection(config)
 
-  // Log ICE candidates
   pc.onicecandidate = (event) => {
     if (event.candidate) {
       console.log("ICE candidate:", event.candidate.candidate)
-      // Parse the candidate to check if it's using our STUN/TURN servers
+
       const candidateStr = event.candidate.candidate
       if (candidateStr.includes("relay")) {
         console.log("%cTURN server being used! ✅", "color: green; font-weight: bold", candidateStr)
@@ -58,15 +51,12 @@ function testStunTurnConfig() {
     }
   }
 
-  // When ICE gathering is complete, provide a summary
   pc.onicegatheringstatechange = () => {
     console.log("ICE gathering state:", pc.iceGatheringState)
 
     if (pc.iceGatheringState === "complete") {
-      // Get the SDP description which contains all candidates
       const sdp = pc.localDescription.sdp
 
-      // Count the different types of candidates
       const hostCount = (sdp.match(/typ host/g) || []).length
       const srflxCount = (sdp.match(/typ srflx/g) || []).length
       const relayCount = (sdp.match(/typ relay/g) || []).length
@@ -94,15 +84,12 @@ function testStunTurnConfig() {
     }
   }
 
-  // Log connection state changes
   pc.oniceconnectionstatechange = () => {
     console.log("ICE connection state:", pc.iceConnectionState)
   }
 
-  // Create a data channel to trigger ICE candidate gathering
   const dc = pc.createDataChannel("test")
 
-  // Create an offer to start the ICE gathering process
   pc.createOffer()
     .then((offer) => pc.setLocalDescription(offer))
     .then(() => {
@@ -112,11 +99,9 @@ function testStunTurnConfig() {
       console.error("Error creating offer:", err)
     })
 
-  // Return the peer connection for cleanup
   return pc
 }
 
-// Export the function for use in the browser console
 window.testStunTurnConfig = testStunTurnConfig
 
 console.log("STUN/TURN test script loaded. Run window.testStunTurnConfig() in the console to test.")

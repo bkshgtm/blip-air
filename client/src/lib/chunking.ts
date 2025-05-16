@@ -48,9 +48,7 @@ export function formatTime(seconds: number): string {
   if (!isFinite(seconds) || seconds < 0) return "calculating..."
   if (seconds === 0) return "0s"
 
-  // Cap extremely long estimates to a reasonable maximum
   if (seconds > 86400) {
-    // More than 24 hours
     return "over 24h"
   }
 
@@ -68,18 +66,16 @@ export function formatTime(seconds: number): string {
 }
 
 /**
- * Calculate accurate transfer progress with safeguards against invalid values
- * @param received Number of bytes or chunks received
- * @param total Total number of bytes or chunks
- * @returns Progress as a number between 0 and 1
+ * Calculate accurate
+ * @param received
+ * @param total
+ * @returns
  */
 export function calculateProgress(received: number, total: number): number {
-  // Handle invalid inputs
   if (!isFinite(received) || !isFinite(total) || total <= 0) {
     return 0
   }
 
-  // Calculate progress and clamp between 0 and 1
   const progress = received / total
   return Math.max(0, Math.min(1, progress))
 }

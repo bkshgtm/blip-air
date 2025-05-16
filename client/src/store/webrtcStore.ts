@@ -72,25 +72,22 @@ interface WebRTCState {
   retryConnectionWithRelay: (peerId: string) => Promise<void>
 }
 
-// Optimized configuration with fewer STUN/TURN servers for faster discovery
 const DEFAULT_PC_CONFIG: RTCConfiguration = {
   iceServers: [
     {
-      // Keep the STUN server for NAT traversal
       urls: [import.meta.env.VITE_STUN_URL || "stun:stun.l.google.com:19302"],
     },
     {
-      // Use only two TURN servers - one for UDP and one for TCP fallback
       urls: [
-        import.meta.env.VITE_TURN_URL_1 || "turn:standard.relay.metered.ca:80", // UDP
-        import.meta.env.VITE_TURN_URL_2 || "turn:standard.relay.metered.ca:80?transport=tcp", // TCP fallback
+        import.meta.env.VITE_TURN_URL_1 || "turn:standard.relay.metered.ca:80",
+        import.meta.env.VITE_TURN_URL_2 || "turn:standard.relay.metered.ca:80?transport=tcp",
       ],
       username: import.meta.env.VITE_TURN_USERNAME || "openrelayproject",
       credential: import.meta.env.VITE_TURN_CREDENTIAL || "openrelayproject",
     },
   ],
   iceTransportPolicy: "all" as RTCIceTransportPolicy,
-  iceCandidatePoolSize: 5, // Reduced from 10 to 5 for faster gathering
+  iceCandidatePoolSize: 5,
 }
 
 export const useWebRTCStore = create<WebRTCState>((set, get) => ({
@@ -447,16 +444,13 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
             )
             get().updateTransferStatus(confirmedFileId, "completed")
 
-            // Notify the user that the transfer is complete
             const transfer = get().transfers.find((t) => t.fileId === confirmedFileId)
             if (transfer && !transfer._notified) {
-              // Mark as notified to prevent duplicate notifications
               const updatedTransfers = get().transfers.map((t) =>
                 t.fileId === confirmedFileId ? { ...t, _notified: true } : t,
               )
               set({ transfers: updatedTransfers })
 
-              // You could add a notification here if needed
               console.log(
                 `[WebRTC] Transfer of ${transfer.fileName} to ${transfer.peerId} is complete and confirmed by receiver`,
               )
@@ -652,20 +646,15 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
           const now = Date.now()
           const elapsedTime = (now - (transfer.startTime || now)) / 1000
 
-          // Use the new calculateProgress function for more accurate progress
           const progress = calculateProgress(transfer.chunks.received, transfer.chunks.total)
 
-          // Calculate bytes received based on progress
           const bytesReceived = progress * transfer.fileSize
 
-          // Calculate speed with safeguards against division by zero
           const speed = elapsedTime > 0.1 ? bytesReceived / elapsedTime : 0
 
-          // Calculate remaining bytes and ETA
           const remainingBytes = transfer.fileSize - bytesReceived
-          const eta = speed > 1000 ? remainingBytes / speed : 0 // Only calculate ETA if speed is meaningful
+          const eta = speed > 1000 ? remainingBytes / speed : 0
 
-          // Update transfer with calculated values
           transfer.progress = progress
           transfer.speed = speed
           transfer.eta = eta
@@ -688,17 +677,14 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
                 finalStatus = "error"
               }
             } else if (!transfer.usesFileSystemAccessAPI) {
-              // More robust Blob assembly with better error handling and recovery
               try {
                 console.log(`[WebRTC] Attempting to assemble file ${fileId} from chunks...`)
 
-                // First check if we have all the chunks
                 if (!transfer.chunks.data || transfer.chunks.data.length !== transfer.chunks.total) {
                   console.error(
                     `[WebRTC] Chunk data array length mismatch: ${transfer.chunks.data?.length} vs expected ${transfer.chunks.total}`,
                   )
 
-                  // Try to resize the array if needed
                   if (transfer.chunks.data && transfer.chunks.data.length < transfer.chunks.total) {
                     console.log(
                       `[WebRTC] Resizing chunk data array from ${transfer.chunks.data.length} to ${transfer.chunks.total}`,
@@ -716,7 +702,6 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
                   }
                 }
 
-                // Check for missing chunks
                 const missingChunks: number[] = []
                 if (transfer.chunks.receivedIndices) {
                   for (let i = 0; i < transfer.chunks.total; i++) {
@@ -725,7 +710,6 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
                     }
                   }
                 } else {
-                  // If receivedIndices is not available, check the data array
                   for (let i = 0; i < transfer.chunks.total; i++) {
                     if (
                       !transfer.chunks.data ||
@@ -744,10 +728,8 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
                     }`,
                   )
 
-                  // Request missing chunks if we have a connection
                   const connection = get().peerConnections.get(transfer.peerId)
                   if (connection && connection.dataChannel && connection.dataChannel.readyState === "open") {
-                    // Only request a batch of chunks at a time to avoid overwhelming the connection
                     const chunksToRequest = missingChunks.slice(0, 100)
                     console.log(`[WebRTC] Requesting resend of ${chunksToRequest.length} missing chunks`)
 
@@ -761,7 +743,6 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
                       }),
                     )
 
-                    // Keep status as transferring
                     finalStatus = "transferring"
                     return
                   } else {
@@ -772,8 +753,6 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
                   }
                 }
 
-                // If we get here, we should have all chunks - try to assemble them
-                // Filter out null values and ensure we only have valid Uint8Array objects
                 const validChunks = transfer.chunks.data!.filter(
                   (chunk): chunk is Uint8Array => chunk !== null && chunk instanceof Uint8Array && chunk.byteLength > 0,
                 )
@@ -783,7 +762,6 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
                     `[WebRTC] Valid chunks count (${validChunks.length}) doesn't match expected total (${transfer.chunks.total})`,
                   )
 
-                  // If we have most of the chunks, try to assemble anyway
                   if (validChunks.length >= transfer.chunks.total * 0.99) {
                     console.log(
                       `[WebRTC] Attempting to assemble file with ${validChunks.length}/${
@@ -797,7 +775,6 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
                   }
                 }
 
-                // Create the blob from valid chunks
                 const fileBlob = new Blob(validChunks, { type: transfer.fileType })
                 transfer.fileBlob = fileBlob
 
@@ -805,32 +782,26 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
                   `[WebRTC] File ${transfer.fileName} (${fileId}) assembled. Blob size: ${fileBlob.size}, Expected size: ${transfer.fileSize}`,
                 )
 
-                // Check if the size is within tolerance
                 const sizeDifference = Math.abs(fileBlob.size - transfer.fileSize)
                 const sizeTolerancePercent = (sizeDifference / transfer.fileSize) * 100
 
                 if (sizeTolerancePercent > 1.0) {
-                  // More generous tolerance (1% instead of 0.1%)
                   console.error(
                     `[WebRTC] Assembled Blob size mismatch for ${fileId}! Blob: ${fileBlob.size}, Expected: ${
                       transfer.fileSize
                     }, Difference: ${sizeDifference} bytes (${sizeTolerancePercent.toFixed(4)}%)`,
                   )
 
-                  // If the difference is too large, request all chunks again
                   const connection = get().peerConnections.get(transfer.peerId)
                   if (connection && connection.dataChannel && connection.dataChannel.readyState === "open") {
-                    // Request a full retransmission
                     console.log(`[WebRTC] Size mismatch too large, requesting full retransmission`)
 
-                    // Clear existing data and request all chunks
                     transfer.chunks.data = new Array(transfer.chunks.total).fill(null)
                     transfer.chunks.receivedIndices = new Set<number>()
                     transfer.chunks.received = 0
 
                     const allChunks = Array.from({ length: transfer.chunks.total }, (_, i) => i)
 
-                    // Request in batches of 100
                     const firstBatch = allChunks.slice(0, 100)
                     connection.dataChannel.send(
                       JSON.stringify({
@@ -1761,17 +1732,16 @@ export const useWebRTCStore = create<WebRTCState>((set, get) => ({
     const relayConfig: RTCConfiguration = {
       iceServers: [
         {
-          // For relay-only mode, we use just one TURN server with both UDP and TCP options
           urls: [
-            import.meta.env.VITE_TURN_URL_1 || "turn:standard.relay.metered.ca:80", // UDP
-            import.meta.env.VITE_TURN_URL_2 || "turn:standard.relay.metered.ca:80?transport=tcp", // TCP fallback
+            import.meta.env.VITE_TURN_URL_1 || "turn:standard.relay.metered.ca:80",
+            import.meta.env.VITE_TURN_URL_2 || "turn:standard.relay.metered.ca:80?transport=tcp",
           ],
           username: import.meta.env.VITE_TURN_USERNAME || "openrelayproject",
           credential: import.meta.env.VITE_TURN_CREDENTIAL || "openrelayproject",
         },
       ],
       iceTransportPolicy: "relay" as RTCIceTransportPolicy,
-      iceCandidatePoolSize: 3, // Even smaller pool for relay-only mode
+      iceCandidatePoolSize: 3,
     }
 
     console.log(`[WebRTC] Creating new RTCPeerConnection for peer ${peerId} with relay-only config`)
