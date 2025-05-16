@@ -93,6 +93,10 @@ The signaling server only facilitates the initial connection between peers. Once
 - **Keep the app open** during transfers to prevent interruptions
 - **For large files**, ensure both devices have sufficient storage and memory
 
+<div align="center">
+  <img width="1512" alt="Image" src="https://github.com/user-attachments/assets/8fb55ade-50ff-4c1a-8f7c-8a08f48f81bb" />
+</div>
+
 ## Development
 
 ### Prerequisites
