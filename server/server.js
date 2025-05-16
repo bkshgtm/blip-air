@@ -334,6 +334,8 @@ io.on("connection", (socket) => {
     isPrivateNetwork: isPrivate,
     connectionTime: Date.now(),
     peers: [],
+    deviceInfo: null, // Will be populated when device-info is received
+    isIOSSafari: false, // Will be set to true for iOS Safari devices
   });
 
   // Add to subnet group
@@ -385,6 +387,38 @@ io.on("connection", (socket) => {
     }
   });
 
+  // Handle device info for special handling of iOS Safari
+  socket.on("device-info", (deviceInfo) => {
+    const session = Array.from(sessions.entries()).find(
+      ([_, s]) => s.socketId === socket.id
+    );
+
+    if (session) {
+      const [id, sessionData] = session;
+
+      // Store device info
+      sessionData.deviceInfo = deviceInfo;
+
+      // Special handling for iOS Safari
+      if (deviceInfo.isIOSSafari) {
+        console.log(
+          `iOS Safari detected for session ${id}. Applying special handling.`
+        );
+        logPeerDiscovery(`iOS Safari detected`, { sessionId: id, deviceInfo });
+
+        sessionData.isIOSSafari = true;
+
+        // Force update peers to apply iOS Safari special handling
+        updatePeers();
+      }
+    }
+  });
+
+  // Handle ping from Safari clients to keep connection alive
+  socket.on("ping", () => {
+    socket.emit("pong");
+  });
+
   socket.on("disconnect", () => {
     console.log(`Client disconnected: ${socket.id}`);
 
@@ -425,6 +459,25 @@ function updatePeers() {
     totalGroups: subnetGroups.size,
     groups: Array.from(subnetGroups.keys()),
   });
+
+  // First, create a map of all iOS Safari sessions for special handling
+  const iosSafariSessions = new Map();
+  for (const [id, session] of sessions.entries()) {
+    if (session.isIOSSafari) {
+      iosSafariSessions.set(id, session);
+    }
+  }
+
+  // Log iOS Safari sessions if any are found
+  if (iosSafariSessions.size > 0) {
+    logPeerDiscovery(
+      `Found ${iosSafariSessions.size} iOS Safari sessions for special handling`,
+      {
+        sessionIds: Array.from(iosSafariSessions.keys()),
+      }
+    );
+  }
+
   for (const [sessionId, session] of sessions.entries()) {
     // Get peers only from the same group (subnet or fallback)
     const groupId = session.groupId;
@@ -452,12 +505,79 @@ function updatePeers() {
         });
     }
 
+    // Special handling for iOS Safari devices
+    if (session.isIOSSafari) {
+      // For iOS Safari, include all peers on private networks
+      // This ensures iOS Safari can see all peers regardless of network ID
+      logPeerDiscovery(`Applying iOS Safari special handling for ${sessionId}`);
+
+      // Find all peers on private networks that aren't already included
+      for (const [peerId, peerSession] of sessions.entries()) {
+        // Skip self and already included peers
+        if (
+          peerId === sessionId ||
+          peersInSameGroup.some((p) => p.id === peerId)
+        ) {
+          continue;
+        }
+
+        // Include peers on private networks
+        if (peerSession.isPrivateNetwork) {
+          peersInSameGroup.push({
+            id: peerId,
+            name: peerSession.name,
+            networkId: peerSession.networkId,
+            subnet: peerSession.networkId,
+            isPrivateNetwork: peerSession.isPrivateNetwork,
+            connectionTime: peerSession.connectionTime,
+          });
+
+          logPeerDiscovery(
+            `Added peer ${peerId} to iOS Safari session ${sessionId} via special handling`
+          );
+        }
+      }
+    }
+
+    // For non-iOS Safari devices, add iOS Safari peers to their peer list
+    // This ensures other devices can see iOS Safari peers
+    if (
+      !session.isIOSSafari &&
+      session.isPrivateNetwork &&
+      iosSafariSessions.size > 0
+    ) {
+      for (const [
+        iosSafariId,
+        iosSafariSession,
+      ] of iosSafariSessions.entries()) {
+        // Skip if this iOS Safari peer is already in the list
+        if (peersInSameGroup.some((p) => p.id === iosSafariId)) {
+          continue;
+        }
+
+        // Add the iOS Safari peer to this device's peer list
+        peersInSameGroup.push({
+          id: iosSafariId,
+          name: iosSafariSession.name,
+          networkId: iosSafariSession.networkId,
+          subnet: iosSafariSession.networkId,
+          isPrivateNetwork: iosSafariSession.isPrivateNetwork,
+          connectionTime: iosSafariSession.connectionTime,
+        });
+
+        logPeerDiscovery(
+          `Added iOS Safari peer ${iosSafariId} to session ${sessionId}`
+        );
+      }
+    }
+
     logPeerDiscovery(`Sending peers to client`, {
       sessionId: sessionId,
       clientName: session.name,
       groupId: groupId,
       peerCount: peersInSameGroup.length,
       isPrivateNetwork: session.isPrivateNetwork,
+      isIOSSafari: session.isIOSSafari,
     });
 
     // Send peers and network status information

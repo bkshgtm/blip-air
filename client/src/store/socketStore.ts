@@ -12,6 +12,26 @@ function logNetworkDiagnostics(message: string, data?: any) {
   }
 }
 
+// Device detection for special handling
+const isIOSSafari = () => {
+  const ua = navigator.userAgent
+  // iOS detection without using MSStream
+  const isIOS = /iPad|iPhone|iPod/.test(ua) && !/Windows Phone/.test(ua)
+  const isSafari = /Safari/.test(ua) && !/Chrome/.test(ua)
+  return isIOS && isSafari
+}
+
+const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+
+const deviceInfo = {
+  isIOSSafari: isIOSSafari(),
+  isSafari: isSafari,
+  isMobile: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent),
+  userAgent: navigator.userAgent,
+}
+
+console.log(`[SocketStore] Device detection:`, deviceInfo)
+
 const BASE_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3001"
 const SERVER_URL = BASE_URL.replace(/^http/, "ws").replace(/^https/, "wss")
 
@@ -130,6 +150,28 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         }
       } catch (error) {
         logNetworkDiagnostics("Error accessing network information", { error })
+      }
+
+      // Send device info to server for special handling
+      console.log("[SocketStore] Sending device info to server:", deviceInfo)
+      newSocket.emit("device-info", deviceInfo)
+
+      // Set up Safari-specific ping to keep connection alive
+      if (deviceInfo.isIOSSafari || deviceInfo.isSafari) {
+        console.log("[SocketStore] Setting up Safari ping interval to keep connection alive")
+        const pingInterval = setInterval(() => {
+          if (newSocket.connected) {
+            console.log("[SocketStore] Sending ping to keep Safari connection alive")
+            newSocket.emit("ping")
+          } else {
+            clearInterval(pingInterval)
+          }
+        }, 30000) // Send ping every 30 seconds
+
+        // Clear interval on disconnect
+        newSocket.on("disconnect", () => {
+          clearInterval(pingInterval)
+        })
       }
 
       if (sessionName) {
