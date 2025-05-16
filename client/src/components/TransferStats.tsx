@@ -14,7 +14,8 @@ const TransferStats = () => {
   // Filter transfers by status
   const activeTransfers = transfers.filter((t) => t.status === "transferring" || t.status === "paused")
   const completedTransfers = transfers.filter((t) => t.status === "completed")
-  const erroredTransfers = transfers.filter((t) => t.status === "error")
+  // We'll use this variable later for error reporting/statistics
+  // const erroredTransfers = transfers.filter((t) => t.status === "error")
 
   // Calculate total size of all non-errored transfers
   const totalSize = transfers.filter((t) => t.status !== "error").reduce((acc, t) => acc + t.fileSize, 0)
