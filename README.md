@@ -202,7 +202,7 @@ The signaling server is configured for deployment on Fly.io:
 - **Progressive enhancement** with File System Access API where available
 
 <div align="center">
-  <img src="screenshots/completed-transfer.png" alt="Completed Transfer" width="80%" />
+  <img width="1503" alt="Image" src="https://github.com/user-attachments/assets/ce803bec-47a6-495d-8de7-7897049b5055" />
 </div>
 
 ## Contributing
