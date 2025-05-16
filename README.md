@@ -66,6 +66,10 @@ BlipAir consists of two main components:
 
 The signaling server only facilitates the initial connection between peers. Once connected, all file transfers occur directly between browsers without passing through any server.
 
+div align="center">
+  <img width="1512" alt="Image" src="https://github.com/user-attachments/assets/739ade51-1701-460c-b862-1c62ce9860f4" />
+</div>
+
 ## Getting Started
 
 ### Using BlipAir
