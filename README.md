@@ -159,7 +159,7 @@ The signaling server only facilitates the initial connection between peers. Once
 3. Open your browser at `https://localhost:5173`
 
 <div align="center">
-  <img src="screenshots/mobile-view.png" alt="Mobile View" width="40%" />
+  <img width="331" alt="Image" src="https://github.com/user-attachments/assets/e8063a00-f556-45b1-98fd-bca62f40e624" />
 </div>
 
 ## Deployment
