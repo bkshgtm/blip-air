@@ -188,7 +188,7 @@ The signaling server is configured for deployment on Fly.io:
 
 ### Key Technologies
 
-- **Frontend**: React, TypeScript, Vite, TailwindCSS, Framer Motion
+- **Frontend**: React, TypeScript, Vite, TailwindCSS, Shadcn/ui, Framer Motion
 - **Backend**: Node.js, Express, Socket.io
 - **Communication**: WebRTC, WebSockets
 - **Deployment**: Vercel (client), Fly.io (server)
