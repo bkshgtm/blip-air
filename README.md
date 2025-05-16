@@ -41,7 +41,7 @@ BlipAir is a modern web application that enables direct peer-to-peer file transf
 - **Elegant UI**: Responsive design with dark and light themes
 
 <div align="center">
-  <img src="screenshots/transfer-in-progress.png" alt="Transfer in Progress" width="80%" />
+  <img width="1512" alt="Image" src="https://github.com/user-attachments/assets/f1b73912-8594-46d3-9e0b-9ea1ed5c43e0" />
 </div>
 
 ## How It Works
