@@ -4,7 +4,7 @@
   <p><strong>Seamless peer-to-peer file transfers directly in your browser</strong></p>
   
   <p>
-    <a href="#blipair.com">Live Demo</a> •
+    <a href="https://www.blipair.com">Live Demo</a> •
     <a href="#features">Features</a> •
     <a href="#how-it-works">How It Works</a> •
     <a href="#getting-started">Getting Started</a> •
