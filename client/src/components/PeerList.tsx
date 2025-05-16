@@ -1,7 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Send, User, Wifi, WifiOff, AlertTriangle, Info } from "lucide-react"
+import { Send, User, Wifi, Info } from "lucide-react"
 import { useSocketStore } from "../store/socketStore"
 import { useWebRTCStore } from "../store/webrtcStore"
 import { useToast } from "@/hooks/use-toast"
@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import { Button } from "./ui/button"
 import { Avatar, AvatarFallback } from "./ui/avatar"
 import { Badge } from "./ui/badge"
-import { ScrollArea } from "./ui/scroll-area"
 import { Separator } from "./ui/separator"
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
 import { useState, useEffect } from "react"
@@ -68,11 +67,7 @@ const PeerList = () => {
 
           {networkInfo && (
             <div className="flex items-center">
-              {networkInfo.isPrivateNetwork ? (
-                <Wifi className="h-4 w-4 text-green-500 mr-1" />
-              ) : (
-                <WifiOff className="h-4 w-4 text-yellow-500 mr-1" />
-              )}
+              <Wifi className="h-4 w-4 text-green-500 mr-1" />
               <span className={`text-xs ${isDark ? "text-white/60" : "text-black/60"}`}>
                 {networkInfo.peerCount} peers
               </span>
@@ -80,39 +75,33 @@ const PeerList = () => {
           )}
         </div>
 
-        {networkInfo && !networkInfo.isPrivateNetwork && (
-          <Alert className="mt-2 py-2 border-yellow-500/50 bg-yellow-500/10" variant="default">
-            <AlertTriangle className="h-4 w-4 text-yellow-500" />
-            <AlertTitle className="text-xs font-medium text-yellow-500">Not on a private network</AlertTitle>
-            <AlertDescription className="text-xs text-yellow-500/90">
-              You appear to be on a public network. Peer discovery works best on private WiFi networks.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {networkInfo && networkInfo.isPrivateNetwork && peers.length === 0 && (
+        {networkInfo && peers.length === 0 && (
           <Alert className="mt-2 py-2 border-blue-500/50 bg-blue-500/10" variant="default">
             <Info className="h-4 w-4 text-blue-500" />
             <AlertTitle className="text-xs font-medium text-blue-500">No peers found</AlertTitle>
             <AlertDescription className="text-xs text-blue-500/90">
-              You're on a private network ({networkInfo.subnet}), but no peers were found. Make sure other devices are
-              on the same WiFi.
+              No other devices found on your network. Make sure other devices are connected to the same WiFi.
             </AlertDescription>
           </Alert>
         )}
       </CardHeader>
       <Separator className={isDark ? "bg-white/5" : "bg-black/5"} />
-      <CardContent className="pt-4 h-[calc(100%-60px)]">
+      <CardContent className="pt-4 flex-1 overflow-hidden">
         {peers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center space-y-2">
-            <p className={isDark ? "text-white/60" : "text-black/60"}>No peers found on your network</p>
-            <p className={`text-xs sm:text-sm ${isDark ? "text-white/40" : "text-black/40"}`}>
-              Make sure other devices are connected to the same WiFi network
-            </p>
+          <div className="flex flex-col items-center justify-center h-full text-center">
+            <div className="flex flex-col items-center space-y-1 px-4 max-w-xs">
+              <p className={`${isDark ? "text-white/60" : "text-black/60"} text-sm font-medium`}>
+                No peers found on your network
+              </p>
+              <div className="w-16 h-px bg-gradient-to-r from-transparent via-gray-500/30 to-transparent my-1"></div>
+              <p className={`text-xs ${isDark ? "text-white/40" : "text-black/40"}`}>
+                Make sure other devices are connected to the same WiFi
+              </p>
+            </div>
           </div>
         ) : (
-          <ScrollArea className="h-full pr-4">
-            <div className="space-y-2 sm:space-y-3">
+          <div className="h-full overflow-y-auto">
+            <div className="space-y-2 pr-2">
               {peers.map((peer) => (
                 <motion.div
                   key={peer.id}
@@ -146,7 +135,7 @@ const PeerList = () => {
                       </Avatar>
                       <div className="space-y-0.5 sm:space-y-1 overflow-hidden">
                         <p
-                          className={`font-medium text-xs sm:text-sm truncate max-w-[80px] sm:max-w-[120px] md:max-w-[80px] lg:max-w-[120px] ${
+                          className={`font-medium text-xs sm:text-sm truncate max-w-[100px] sm:max-w-[120px] ${
                             isDark ? "text-white/90" : "text-black/90"
                           }`}
                         >
@@ -197,7 +186,7 @@ const PeerList = () => {
                 </motion.div>
               ))}
             </div>
-          </ScrollArea>
+          </div>
         )}
       </CardContent>
     </Card>

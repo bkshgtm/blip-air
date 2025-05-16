@@ -8,7 +8,45 @@ import { Server } from "socket.io";
 import cors from "cors";
 import { v4 as uuidv4 } from "uuid";
 
+// Enhanced logging for peer discovery
+const VERBOSE_LOGGING = true; // Can be toggled with an environment variable later
+
+// Add this function for controlled logging
+function logPeerDiscovery(message, data) {
+  if (VERBOSE_LOGGING) {
+    console.log(`[PeerDiscovery] ${message}`, data ? JSON.stringify(data) : "");
+  }
+}
+
+// Environment detection
+function getDeploymentEnvironment() {
+  // Check for fly.io specific environment variables
+  const isFlyIo = process.env.FLY_APP_NAME !== undefined;
+
+  // Check for local development indicators
+  const isLocalDev = process.env.NODE_ENV !== "production";
+
+  logPeerDiscovery(`Deployment environment:`, {
+    environment: isFlyIo
+      ? "fly.io"
+      : isLocalDev
+      ? "local development"
+      : "unknown production",
+    nodeEnv: process.env.NODE_ENV,
+  });
+
+  return {
+    isFlyIo,
+    isLocalDev,
+    isProd: process.env.NODE_ENV === "production",
+  };
+}
+
 const app = express();
+
+// Call this early in server startup
+const env = getDeploymentEnvironment();
+logPeerDiscovery("Server starting up", { environment: env });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -95,6 +133,23 @@ app.get("/health", (req, res) => {
   res.status(200).json({ status: "healthy" });
 });
 
+// Detailed peer discovery status endpoint
+app.get("/peer-discovery-status", (req, res) => {
+  // Gather stats without changing behavior
+  const stats = {
+    totalSessions: sessions.size,
+    totalGroups: subnetGroups.size,
+    groups: Array.from(subnetGroups.entries()).map(([groupId, sessionIds]) => ({
+      groupId,
+      peerCount: sessionIds.size,
+      // Don't include actual session IDs for privacy
+    })),
+    environment: getDeploymentEnvironment(),
+  };
+
+  res.status(200).json(stats);
+});
+
 // Only serve static files in production
 if (IS_PROD) {
   app.use(express.static(path.join(__dirname, "../client/dist")));
@@ -108,43 +163,92 @@ if (IS_PROD) {
 const sessions = new Map();
 const subnetGroups = new Map(); // Map to group clients by subnet
 
-// Helper function to check if an IP is in a private range
+/**
+ * Network ID extraction - Following Snapdrop's approach
+ *
+ * This function extracts a network identifier from an IP address.
+ * For IPv4, it uses the first three octets (e.g., 192.168.1.x -> 192.168.1)
+ * This groups devices on the same subnet together.
+ */
+function getNetworkId(ip) {
+  logPeerDiscovery(`Extracting network ID from IP: ${ip}`);
+
+  // Handle empty or invalid IPs
+  if (!ip || typeof ip !== "string") {
+    logPeerDiscovery(`Invalid IP address: ${ip}, using fallback group`);
+    return "unknown-network";
+  }
+
+  // For IPv4 addresses
+  if (ip.includes(".")) {
+    const parts = ip.split(".");
+
+    // Use first three octets for all IPv4 addresses
+    // This works for both private (192.168.1.x) and public IPs
+    if (parts.length >= 3) {
+      const networkId = parts.slice(0, 3).join(".");
+      logPeerDiscovery(`Extracted network ID ${networkId} from IPv4 ${ip}`);
+      return networkId;
+    }
+    return ip; // Fallback to full IP if we can't extract parts
+  }
+
+  // For IPv6 addresses
+  if (ip.includes(":")) {
+    const normalizedIP = ip.toLowerCase();
+
+    // Handle localhost
+    if (normalizedIP === "::1" || normalizedIP === "0:0:0:0:0:0:0:1") {
+      return "localhost-ipv6";
+    }
+
+    // For other IPv6 addresses, extract the first 4 segments
+    const parts = normalizedIP.split(":");
+    if (parts.length >= 4) {
+      const networkId = parts.slice(0, 4).join(":");
+      logPeerDiscovery(`Extracted network ID ${networkId} from IPv6 ${ip}`);
+      return networkId;
+    }
+
+    // Fallback to full IP
+    return normalizedIP;
+  }
+
+  // Fallback for any other format
+  logPeerDiscovery(`Unrecognized IP format: ${ip}, using as-is`);
+  return ip;
+}
+
+/**
+ * Check if an IP is in a private range
+ * This is used for informational purposes only, not for grouping
+ */
 function isPrivateIP(ip) {
   // Handle IPv4 addresses
   if (ip.includes(".")) {
     const parts = ip.split(".").map(Number);
 
     // Check for private IPv4 ranges
-    // 10.0.0.0 - 10.255.255.255
-    if (parts[0] === 10) return true;
-
-    // 172.16.0.0 - 172.31.255.255
-    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
-
-    // 192.168.0.0 - 192.168.255.255
-    if (parts[0] === 192 && parts[1] === 168) return true;
-
-    // 169.254.0.0 - 169.254.255.255 (link-local)
-    if (parts[0] === 169 && parts[1] === 254) return true;
-
-    // Localhost
-    if (parts[0] === 127) return true;
+    if (parts[0] === 10) return true; // 10.0.0.0/8
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true; // 172.16.0.0/12
+    if (parts[0] === 192 && parts[1] === 168) return true; // 192.168.0.0/16
+    if (parts[0] === 169 && parts[1] === 254) return true; // 169.254.0.0/16 (link-local)
+    if (parts[0] === 127) return true; // Localhost
 
     return false;
   }
 
   // Handle IPv6 addresses
   if (ip.includes(":")) {
-    // Convert to lowercase for comparison
     const ipLower = ip.toLowerCase();
 
-    // Check for IPv6 localhost
+    // IPv6 localhost
     if (ipLower === "::1" || ipLower === "0:0:0:0:0:0:0:1") return true;
 
-    // Check for IPv6 unique local addresses (fc00::/7)
+    // IPv6 unique local addresses (fc00::/7)
     if (ipLower.startsWith("fc") || ipLower.startsWith("fd")) return true;
 
-    // Check for IPv6 link-local addresses (fe80::/10)
+    // IPv6 link-local addresses (fe80::/10)
     if (
       ipLower.startsWith("fe8") ||
       ipLower.startsWith("fe9") ||
@@ -159,58 +263,6 @@ function isPrivateIP(ip) {
   return false;
 }
 
-// Helper function to extract subnet from IP address
-function getSubnet(ip) {
-  // Handle IPv4 addresses
-  if (ip.includes(".")) {
-    const parts = ip.split(".");
-
-    // Different subnet masks based on private IP ranges
-    if (parts[0] === "10") {
-      // 10.0.0.0/8 - Use first two octets
-      return parts.slice(0, 2).join(".");
-    } else if (
-      parts[0] === "172" &&
-      parseInt(parts[1]) >= 16 &&
-      parseInt(parts[1]) <= 31
-    ) {
-      // 172.16.0.0/12 - Use first two octets
-      return parts.slice(0, 2).join(".");
-    } else if (parts[0] === "192" && parts[1] === "168") {
-      // 192.168.0.0/16 - Use first three octets
-      return parts.slice(0, 3).join(".");
-    } else if (parts[0] === "169" && parts[1] === "254") {
-      // 169.254.0.0/16 (link-local) - Use first three octets
-      return parts.slice(0, 3).join(".");
-    } else {
-      // Default for other IPv4 addresses
-      return parts.slice(0, 3).join(".");
-    }
-  }
-
-  // Handle IPv6 addresses
-  else if (ip.includes(":")) {
-    // For IPv6, use the first 4 segments as the subnet
-    // This is a simplification but should work for most cases
-    const normalizedIP = ip.toLowerCase();
-
-    // Handle special cases
-    if (normalizedIP === "::1" || normalizedIP === "0:0:0:0:0:0:0:1") {
-      return "localhost-ipv6";
-    }
-
-    // Split by : and take first 4 segments
-    const parts = normalizedIP.split(":");
-    return parts.slice(0, 4).join(":");
-  }
-
-  // Fallback
-  return "unknown";
-}
-
-// Group ID for clients that can't be properly grouped by subnet
-const FALLBACK_GROUP_ID = "global-fallback-group";
-
 io.on("connection", (socket) => {
   // Get client's IP address
   let clientIp =
@@ -219,36 +271,65 @@ io.on("connection", (socket) => {
     socket.conn.remoteAddress ||
     socket.handshake.address;
 
+  logPeerDiscovery("Raw client IP detection", {
+    xForwardedFor: socket.handshake.headers["x-forwarded-for"],
+    xRealIp: socket.handshake.headers["x-real-ip"],
+    remoteAddress: socket.conn.remoteAddress,
+    handshakeAddress: socket.handshake.address,
+  });
+
   // If x-forwarded-for contains multiple IPs, take the first one (client IP)
   if (clientIp && clientIp.includes(",")) {
+    const originalIp = clientIp;
     clientIp = clientIp.split(",")[0].trim();
+    logPeerDiscovery(`Extracted first IP from comma-separated list`, {
+      original: originalIp,
+      extracted: clientIp,
+    });
   }
 
   // Remove IPv6 prefix if present (e.g., ::ffff:192.168.1.1 -> 192.168.1.1)
   if (clientIp && clientIp.includes("::ffff:") && clientIp.includes(".")) {
+    const originalIp = clientIp;
     clientIp = clientIp.replace(/^.*:/, "");
+    logPeerDiscovery(`Removed IPv6 prefix`, {
+      original: originalIp,
+      cleaned: clientIp,
+    });
   }
 
-  // Extract subnet
-  const subnet = getSubnet(clientIp);
+  // Extract network ID - this is the key to proper peer grouping
+  const networkId = getNetworkId(clientIp);
+
+  // Check if on private network (for informational purposes only)
   const isPrivate = isPrivateIP(clientIp);
 
-  // Determine group ID - use subnet for private IPs, fallback for public IPs
-  const groupId = isPrivate ? subnet : FALLBACK_GROUP_ID;
+  // Always use the network ID as the group ID
+  // This ensures devices on the same network are grouped together
+  // regardless of whether they're on a private or public network
+  const groupId = networkId;
+
+  logPeerDiscovery(`Client connected`, {
+    socketId: socket.id,
+    clientIp: clientIp,
+    networkId: networkId,
+    isPrivateNetwork: isPrivate,
+    groupId: groupId,
+  });
 
   console.log(
-    `Client connected: ${socket.id} from IP: ${clientIp}, Subnet: ${subnet}, Private: ${isPrivate}, Group: ${groupId}`
+    `Client connected: ${socket.id} from IP: ${clientIp}, NetworkID: ${networkId}, Private: ${isPrivate}, Group: ${groupId}`
   );
 
   const sessionId = uuidv4();
   const sessionName = `User-${sessionId.substring(0, 4)}`;
 
-  // Store session info with IP and subnet
+  // Store session info
   sessions.set(sessionId, {
     socketId: socket.id,
     name: sessionName,
     ip: clientIp,
-    subnet: subnet,
+    networkId: networkId,
     groupId: groupId,
     isPrivateNetwork: isPrivate,
     connectionTime: Date.now(),
@@ -265,7 +346,8 @@ io.on("connection", (socket) => {
   socket.emit("session-created", {
     id: sessionId,
     isPrivateNetwork: isPrivate,
-    subnet: subnet,
+    networkId: networkId,
+    subnet: networkId, // Keep subnet for backward compatibility
   });
 
   updatePeers();
@@ -314,13 +396,13 @@ io.on("connection", (socket) => {
     if (session) {
       const [id, sessionData] = session;
 
-      // Remove from subnet group
-      if (sessionData.subnet && subnetGroups.has(sessionData.subnet)) {
-        subnetGroups.get(sessionData.subnet).delete(id);
+      // Remove from network group
+      if (sessionData.groupId && subnetGroups.has(sessionData.groupId)) {
+        subnetGroups.get(sessionData.groupId).delete(id);
 
-        // Clean up empty subnet groups
-        if (subnetGroups.get(sessionData.subnet).size === 0) {
-          subnetGroups.delete(sessionData.subnet);
+        // Clean up empty network groups
+        if (subnetGroups.get(sessionData.groupId).size === 0) {
+          subnetGroups.delete(sessionData.groupId);
         }
       }
 
@@ -338,6 +420,11 @@ function findSocketIdBySessionId(sessionId) {
 }
 
 function updatePeers() {
+  logPeerDiscovery(`Updating peers`, {
+    totalSessions: sessions.size,
+    totalGroups: subnetGroups.size,
+    groups: Array.from(subnetGroups.keys()),
+  });
   for (const [sessionId, session] of sessions.entries()) {
     // Get peers only from the same group (subnet or fallback)
     const groupId = session.groupId;
@@ -355,7 +442,8 @@ function updatePeers() {
           return {
             id,
             name: peerSession.name,
-            subnet: peerSession.subnet, // Include subnet for debugging
+            networkId: peerSession.networkId, // Include networkId for debugging
+            subnet: peerSession.networkId, // Keep subnet for backward compatibility
             isPrivateNetwork: peerSession.isPrivateNetwork,
             // Include connection time to help identify peers that connected around the same time
             // This can be useful for users to identify which peer is which
@@ -364,12 +452,21 @@ function updatePeers() {
         });
     }
 
+    logPeerDiscovery(`Sending peers to client`, {
+      sessionId: sessionId,
+      clientName: session.name,
+      groupId: groupId,
+      peerCount: peersInSameGroup.length,
+      isPrivateNetwork: session.isPrivateNetwork,
+    });
+
     // Send peers and network status information
     io.to(session.socketId).emit("peers-updated", {
       peers: peersInSameGroup,
       networkInfo: {
         isPrivateNetwork: session.isPrivateNetwork,
-        subnet: session.subnet,
+        networkId: session.networkId,
+        subnet: session.networkId, // Keep subnet for backward compatibility
         peerCount: peersInSameGroup.length,
         totalOnlineUsers: sessions.size,
       },

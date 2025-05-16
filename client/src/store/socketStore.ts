@@ -3,10 +3,27 @@ import { io, type Socket } from "socket.io-client"
 import { useWebRTCStore } from "./webrtcStore"
 import { useSettingsStore } from "./settingsStore"
 
+// Enhanced logging for network diagnostics
+const VERBOSE_LOGGING = true
+
+function logNetworkDiagnostics(message: string, data?: any) {
+  if (VERBOSE_LOGGING) {
+    console.log(`[NetworkDiagnostics] ${message}`, data ? data : "")
+  }
+}
+
 const BASE_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3001"
 const SERVER_URL = BASE_URL.replace(/^http/, "ws").replace(/^https/, "wss")
 
 console.log(`[SocketStore] Connecting to WebSocket URL: ${SERVER_URL}`)
+logNetworkDiagnostics("Environment configuration", {
+  baseUrl: BASE_URL,
+  serverUrl: SERVER_URL,
+  viteEnv: import.meta.env.MODE,
+  // Use MODE to determine development vs production
+  isDevelopment: import.meta.env.MODE === "development",
+  isProduction: import.meta.env.MODE === "production",
+})
 
 const CONNECTION_TIMEOUT = 10000
 
@@ -28,9 +45,10 @@ interface PeerInfo {
 }
 
 interface NetworkInfo {
-  isPrivateNetwork: boolean // Whether the client is on a private network
-  subnet: string // The subnet the client is on
-  peerCount: number // Number of peers on the same subnet
+  isPrivateNetwork?: boolean // Whether the client is on a private network (for backward compatibility)
+  subnet?: string // The subnet the client is on (for backward compatibility)
+  networkId?: string // Network identifier (from new implementation)
+  peerCount: number // Number of peers on the same network
   totalOnlineUsers: number // Total number of users online
 }
 
@@ -85,6 +103,35 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       clearTimeout(timeoutId)
       console.log("✅ Connected to signaling server")
       set({ isConnected: true })
+
+      // Log detailed connection information
+      logNetworkDiagnostics("Socket connected", {
+        socketId: newSocket.id,
+        transport: newSocket.io.engine.transport.name,
+        hostname: window.location.hostname,
+        protocol: window.location.protocol,
+        userAgent: navigator.userAgent,
+      })
+
+      // Log network interfaces if available
+      try {
+        // Network Information API might not be available in all browsers
+        // @ts-ignore - Using optional chaining to safely access
+        const connection = navigator?.connection
+        if (connection) {
+          logNetworkDiagnostics("Network connection info", {
+            effectiveType: connection.effectiveType,
+            downlink: connection.downlink,
+            rtt: connection.rtt,
+            saveData: connection.saveData,
+          })
+        } else {
+          logNetworkDiagnostics("Network Information API not available")
+        }
+      } catch (error) {
+        logNetworkDiagnostics("Error accessing network information", { error })
+      }
+
       if (sessionName) {
         newSocket.emit("set-name", sessionName)
       }
@@ -106,11 +153,13 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     newSocket.on("session-created", (sessionData: any) => {
       console.log("Session data received:", sessionData)
+      logNetworkDiagnostics("Session created", { sessionData })
 
       // Handle both old format (string sessionId) and new format (object with id, isPrivateNetwork, subnet)
       if (typeof sessionData === "string") {
         // Old format - just a session ID string
         console.log(`[SocketStore] Received session ID in old format (string)`)
+        logNetworkDiagnostics("Session format", { type: "legacy-string" })
         set({
           sessionId: sessionData,
           networkInfo: {
@@ -121,19 +170,40 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           },
         })
       } else if (sessionData && typeof sessionData === "object" && sessionData.id) {
-        // New format - object with id, isPrivateNetwork, subnet
+        // New format - object with id, isPrivateNetwork, networkId/subnet
         console.log(`[SocketStore] Received session data in new format (object)`)
+        logNetworkDiagnostics("Session format", {
+          type: "object",
+          isPrivateNetwork: sessionData.isPrivateNetwork,
+          networkId: sessionData.networkId,
+          subnet: sessionData.subnet,
+        })
+
+        // Create network info object with required fields
+        const networkInfo: NetworkInfo = {
+          peerCount: 0,
+          totalOnlineUsers: 1, // Just this client for now
+        }
+
+        // Add optional fields if they exist
+        if (sessionData.isPrivateNetwork !== undefined) {
+          networkInfo.isPrivateNetwork = sessionData.isPrivateNetwork
+        }
+
+        if (sessionData.networkId !== undefined) {
+          networkInfo.networkId = sessionData.networkId
+        } else if (sessionData.subnet !== undefined) {
+          // Backward compatibility
+          networkInfo.subnet = sessionData.subnet
+        }
+
         set({
           sessionId: sessionData.id,
-          networkInfo: {
-            isPrivateNetwork: sessionData.isPrivateNetwork !== undefined ? sessionData.isPrivateNetwork : IS_DEV,
-            subnet: sessionData.subnet || "unknown",
-            peerCount: 0,
-            totalOnlineUsers: 1, // Just this client for now
-          },
+          networkInfo,
         })
       } else {
         console.error(`[SocketStore] Unexpected data format for session-created:`, sessionData)
+        logNetworkDiagnostics("Session format error", { receivedData: sessionData })
       }
     })
 
@@ -141,6 +211,11 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       // Handle both old format (array of peers) and new format (object with peers and networkInfo)
       let peerList: PeerInfo[] = []
       let networkInfo: NetworkInfo | null = null
+
+      logNetworkDiagnostics("Peers updated event received", {
+        dataType: Array.isArray(data) ? "array" : typeof data,
+        hasNetworkInfo: data && typeof data === "object" && data.networkInfo ? true : false,
+      })
 
       if (Array.isArray(data)) {
         // Old format - just an array of peers
@@ -161,6 +236,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         networkInfo = data.networkInfo || null
       } else {
         console.error(`[SocketStore] Unexpected data format for peers-updated:`, data)
+        logNetworkDiagnostics("Peers update format error", { receivedData: data })
         return
       }
 
@@ -170,6 +246,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       // Log peer and network information for debugging
       if (networkInfo) {
         console.log(`[SocketStore] Network info:`, networkInfo)
+        logNetworkDiagnostics("Network information", networkInfo)
       }
 
       if (updated.length > 0) {
@@ -177,8 +254,13 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           `[SocketStore] Received ${updated.length} peers:`,
           updated.map((p) => ({ id: p.id, name: p.name, subnet: p.subnet })),
         )
+        logNetworkDiagnostics("Peers found", {
+          count: updated.length,
+          peers: updated.map((p) => ({ id: p.id, name: p.name })),
+        })
       } else {
         console.log(`[SocketStore] No peers received from server`)
+        logNetworkDiagnostics("No peers found", { groupId: networkInfo?.subnet })
 
         // If on a private network but no peers, log a helpful message
         if (networkInfo && networkInfo.isPrivateNetwork) {
