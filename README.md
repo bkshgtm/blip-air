@@ -75,7 +75,7 @@ The signaling server only facilitates the initial connection between peers. Once
 
 ### Using BlipAir
 
-1. **Open BlipAir** in your browser: [https://blipair.vercel.app](https://blipair.com)
+1. **Open BlipAir** in your browser: [https://blipair.com](https://blipair.com)
 2. **Allow necessary permissions** when prompted
 3. **Select a peer** from the discovered devices list
 4. **Choose files** to send by clicking the upload area or dragging and dropping
